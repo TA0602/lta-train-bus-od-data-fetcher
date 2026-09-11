@@ -64,7 +64,10 @@ def main():
         sys.exit(0)
 
     print(f"Looking for newly published data for {dash_month}...")
-    success = fetch_all_historical(api_key, CSV_TMP, months_back=4)
+    # Only fetch the one new target month — older months never change once
+    # published and are already covered by a previous run's committed
+    # file, so re-fetching them here would just waste API quota.
+    success = fetch_all_historical(api_key, CSV_TMP, months_back=1)
 
     if not success:
         print(f"No data available yet for {dash_month}.")

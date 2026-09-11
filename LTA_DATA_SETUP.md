@@ -80,11 +80,16 @@ a day's buffer and 10 days of retry room). Each run:
 2. If the newest `data/lta_train_od_full_*.xlsx` file's end-month already
    covers the target, **exits immediately with no API calls** — this is
    what makes daily retries safe without burning through the API quota
-3. Otherwise, fetches fresh data. If the new month still isn't published,
-   the run **fails on purpose** (a visible red run) — the next day's
-   scheduled run retries
-4. If the new month **is** available: builds two new dated files, uploads
-   as an artifact, commits, and emails download links
+3. Otherwise, fetches **only that one target month** — not the manual
+   workflow's full 3-4 month window. Older months never change once
+   published and are already covered by a previous run's committed file,
+   so re-fetching them here would just waste quota for nothing. If the
+   new month still isn't published, the run **fails on purpose** (a
+   visible red run) — the next day's scheduled run retries
+4. If the new month **is** available: builds two new dated files (this
+   run's file covers only that single month, e.g.
+   `..._2026-08_2026-08_...xlsx`), uploads as an artifact, commits, and
+   emails download links
 
 You can also trigger it manually (`workflow_dispatch`) to test the logic
 without waiting for the schedule.
