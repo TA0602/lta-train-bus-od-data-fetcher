@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: Find latest existing report files
         id: pipeline
         run: python3 resend_pipeline.py
