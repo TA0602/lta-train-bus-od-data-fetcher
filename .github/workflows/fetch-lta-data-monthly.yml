@@ -20,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -39,7 +39,7 @@ jobs:
 
       - name: Upload reports as workflow artifacts
         if: steps.pipeline.outputs.updated == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lta-train-od-reports
           path: |
@@ -94,7 +94,7 @@ jobs:
 
       - name: Email the report
         if: steps.pipeline.outputs.updated == 'true' && steps.emailcheck.outputs.configured == 'true'
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v21
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT || 587 }}
