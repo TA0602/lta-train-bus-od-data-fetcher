@@ -38,26 +38,38 @@ def fetch_and_save_to_csv(api_key, output_file="lta_train_od_historical.csv"):
             url = f"{base_url}?$skip={skip}"
             print(f"  Fetching records {skip}-{skip + page_size}...")
 
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
+            try:
+                response = requests.get(url, headers=headers, timeout=30)
+                response.raise_for_status()
 
-            data = response.json()
-            records = data.get("value", []) if isinstance(data, dict) else data
+                data = response.json()
+                records = data.get("value", []) if isinstance(data, dict) else data
 
-            if not records:
-                consecutive_empty += 1
-                if consecutive_empty >= 2:
-                    print(f"  Reached end of dataset")
+                if not records:
+                    consecutive_empty += 1
+                    if consecutive_empty >= 2:
+                        print(f"  Reached end of dataset")
+                        break
+                else:
+                    consecutive_empty = 0
+                    all_records.extend(records)
+                    print(f"    Retrieved {len(records)} records (total: {len(all_records)})")
+
+                skip += page_size
+
+                if skip > 100000:
+                    print("  Reached safety limit, stopping fetch")
                     break
-            else:
-                consecutive_empty = 0
-                all_records.extend(records)
-                print(f"    Retrieved {len(records)} records (total: {len(all_records)})")
 
-            skip += page_size
-
-            if skip > 100000:
-                print("  Reached safety limit, stopping fetch")
+            except requests.exceptions.HTTPError as e:
+                if response.status_code == 500:
+                    print(f"  API Server Error (500) at offset {skip}. Stopping fetch with {len(all_records)} records collected.")
+                    break
+                else:
+                    print(f"  HTTP Error {response.status_code}. Stopping fetch with {len(all_records)} records collected.")
+                    break
+            except Exception as e:
+                print(f"  Error: {e}. Stopping fetch with {len(all_records)} records collected.")
                 break
 
         if not all_records:
