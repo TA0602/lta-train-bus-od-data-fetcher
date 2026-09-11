@@ -80,11 +80,12 @@ def main():
         set_output("updated", "false")
         sys.exit(1)
 
-    full_path, start, end = build_named_reports(CSV_TMP)
-    print(f"Built {full_path} covering {start}..{end}.")
+    full_path, station_path, start, end = build_named_reports(CSV_TMP)
+    print(f"Built {full_path} and {station_path} covering {start}..{end}.")
 
     set_output("updated", "true")
     set_output("full_path", full_path)
+    set_output("station_path", station_path)
     set_output("start", start)
     set_output("end", end)
 

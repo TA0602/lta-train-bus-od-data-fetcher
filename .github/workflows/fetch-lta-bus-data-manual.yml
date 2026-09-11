@@ -26,24 +26,26 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Fetch data and build dated report
+      - name: Fetch data and build dated reports
         id: pipeline
         run: python3 manual_bus_pipeline.py "${{ secrets.LTA_API_KEY }}" 4
         env:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
 
-      - name: Upload report as workflow artifact
+      - name: Upload reports as workflow artifacts
         uses: actions/upload-artifact@v7
         with:
           name: lta-bus-od-reports
-          path: ${{ steps.pipeline.outputs.full_path }}
+          path: |
+            ${{ steps.pipeline.outputs.full_path }}
+            ${{ steps.pipeline.outputs.station_path }}
           retention-days: 30
 
-      - name: Commit report
+      - name: Commit reports
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add "${{ steps.pipeline.outputs.full_path }}"
+          git add "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.station_path }}"
           git commit -m "chore: manual fetch of LTA bus OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
           git push origin main
         env:
@@ -64,15 +66,17 @@ jobs:
         if: steps.emailcheck.outputs.configured == 'true'
         run: |
           full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
+          station_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.station_path }}"
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           {
             echo "html<<EOF"
             cat <<HTML
           <h2>LTA Bus OD Data &mdash; Manual Fetch</h2>
           <p>Data range: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
-          <p><strong>Download link:</strong></p>
+          <p><strong>Download links:</strong></p>
           <ul>
             <li><a href="$full_url">Full dataset (all bus stops)</a></li>
+            <li><a href="$station_url">Bus stop 77009-filtered dataset</a></li>
           </ul>
           <p style="color:#666;font-size:0.9em;">Triggered manually &middot; <a href="$run_url">View workflow run</a></p>
           HTML

@@ -40,14 +40,14 @@ Volume by Origin Destination Bus Stops — same CSV schema as the train
 endpoint, but `ORIGIN_PT_CODE`/`DESTINATION_PT_CODE` are bus stop codes):
 
 ```
-data/lta_bus_od_full_<start>_<end>_<run-timestamp>.xlsx   — all bus stops
+data/lta_bus_od_full_<start>_<end>_<run-timestamp>.xlsx    — all bus stops
+data/lta_bus_od_77009_<start>_<end>_<run-timestamp>.xlsx   — bus stop 77009 only
 ```
 
 - **`fetch_lta_bus_data.py`** / **`bus_pipeline_common.py`** /
   **`manual_bus_pipeline.py`** / **`monthly_bus_pipeline.py`** — bus
-  equivalents of the train scripts above (no station-filtered variant,
-  since there's no obvious single default bus stop the way EW1 is for
-  train)
+  equivalents of the train scripts above, filtered to bus stop 77009
+  (the bus equivalent of the EW1 filter on the train side)
 - **`.github/workflows/fetch-lta-bus-data-manual.yml`** /
   **`fetch-lta-bus-data-monthly.yml`** — same manual/monthly split as the
   train workflows (monthly runs at `01:15 UTC` instead of `01:00`, to
