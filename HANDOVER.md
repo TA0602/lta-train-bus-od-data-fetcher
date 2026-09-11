@@ -137,10 +137,11 @@ data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
 ## 🔑 ACTION REQUIRED: rotate the leaked LTA API key
 
 Until 2026-09-11 both fetch scripts carried a **real-looking LTA
-AccountKey hardcoded as a CLI fallback default**:
+AccountKey hardcoded as a CLI fallback default** — the literal value is
+deliberately not reproduced here, but it was the `else` branch of:
 
 ```python
-api_key = sys.argv[1] if len(sys.argv) > 1 else "***REMOVED***"
+api_key = sys.argv[1] if len(sys.argv) > 1 else "<redacted 24-char AccountKey>"
 ```
 
 It has been removed from the source (the scripts now require the key as
@@ -150,6 +151,27 @@ commit before this one. If that key is live, treat it as compromised:
 request a replacement from the LTA DataMall portal, update the
 `LTA_API_KEY` repo secret, and purge the old value from history (the same
 `git filter-repo` route already used once for the data-file purge).
+
+## Why the bus pipeline has no "full" workbook
+
+The first real bus run (Actions run 34610564841) fetched 2026-06..2026-08
+fine and built both workbooks, then **failed on push**: the full
+all-bus-stops workbook was **588.74 MB**, and GitHub hard-rejects any file
+over 100 MB (`GH001`, pre-receive hook declined). The filtered file and the
+artifact were both fine — only the git push died, so nothing landed on
+`main`.
+
+Bus OD is simply a much bigger dataset than train OD (thousands of bus
+stops vs ~170 train stations, so vastly more origin-destination pairs). At
+~196 MB per month the monthly workflow would have hit the same wall. A
+588 MB workbook also blows past Excel's per-sheet row limit, so it was
+never actually openable as a spreadsheet.
+
+The decision (2026-09-11) was to **only ever build the 77009-filtered bus
+workbook** — no full variant. Note this means `latest_end_month_covered()`
+in `bus_pipeline_common.py` globs the *station* prefix, not a full prefix;
+if you ever reintroduce a full file, don't let that coverage check go
+looking for a file the pipeline no longer writes.
 
 ## The 2026-09-11 fetch/report refactor
 

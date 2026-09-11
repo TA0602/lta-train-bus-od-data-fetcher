@@ -71,11 +71,10 @@ def main():
         sys.exit(1)
 
     start, end = months[0], months[-1]
-    full_path, station_path = build_named_reports(CSV_TMP, start, end)
-    print(f"Built {full_path} and {station_path} covering {start}..{end}.")
+    station_path = build_named_reports(CSV_TMP, start, end)
+    print(f"Built {station_path} covering {start}..{end}.")
 
     set_output("updated", "true")
-    set_output("full_path", full_path)
     set_output("station_path", station_path)
     set_output("start", start)
     set_output("end", end)

@@ -41,9 +41,14 @@ Volume by Origin Destination Bus Stops — same CSV schema as the train
 endpoint, but `ORIGIN_PT_CODE`/`DESTINATION_PT_CODE` are bus stop codes):
 
 ```
-data/lta_bus_od_full_<start>_<end>_<run-timestamp>.xlsx    — all bus stops
 data/lta_bus_od_77009_<start>_<end>_<run-timestamp>.xlsx   — bus stop 77009 only
 ```
+
+**There is deliberately no "full" (all bus stops) workbook.** Singapore has
+far more bus stops than train stations, so the unfiltered dataset came out
+at ~588MB for three months — past GitHub's hard 100MB per-file push limit
+(a real run was rejected with `GH001`), and past Excel's own per-sheet row
+limit. The bus pipeline only ever builds the filtered workbook.
 
 - **`fetch_lta_bus_data.py`** / **`bus_pipeline_common.py`** /
   **`manual_bus_pipeline.py`** / **`monthly_bus_pipeline.py`** — bus
