@@ -1,51 +1,82 @@
 #!/usr/bin/env python3
 """
-LTA OD Train Data Fetcher
-Fetches Origin-Destination train data from Singapore LTA API and saves to Excel
+LTA OD Train Historical Data Fetcher
+Fetches all available Origin-Destination train data from Singapore LTA API and saves to Excel
 """
 
 import requests
 import pandas as pd
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
-def fetch_and_convert_to_excel(api_key, output_file="train_data.xlsx"):
+def fetch_and_convert_to_excel(api_key, output_file="lta_train_od_historical.xlsx"):
     """
-    Fetch train OD data from LTA API and save to Excel
+    Fetch all available train OD historical data from LTA API and save to Excel
 
     Args:
         api_key: LTA API key (AccountKey)
         output_file: Output Excel filename
     """
     try:
-        print("Fetching data from LTA API...")
+        print("Fetching historical data from LTA API...")
 
         headers = {
             "AccountKey": api_key,
             "accept": "application/json"
         }
 
-        url = "https://datamall2.mytransport.sg/ltaodataservice/PV/ODTrain"
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
+        base_url = "https://datamall2.mytransport.sg/ltaodataservice/PV/ODTrain"
+        all_records = []
 
-        data = response.json()
+        # Try to fetch with pagination (LTA API typically uses $skip parameter)
+        skip = 0
+        page_size = 500
+        max_records = 50000  # Limit to avoid overwhelming the API
+        consecutive_empty = 0
 
-        # Extract the value array from the response
-        records = data.get("value", []) if isinstance(data, dict) else data
+        while len(all_records) < max_records:
+            url = f"{base_url}?$skip={skip}"
+            print(f"  Fetching page {skip // page_size + 1} (records {skip}-{skip + page_size})...")
 
-        if not records:
-            print("No data received from API")
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+
+            data = response.json()
+            records = data.get("value", []) if isinstance(data, dict) else data
+
+            if not records:
+                consecutive_empty += 1
+                if consecutive_empty >= 2:
+                    print(f"  No more data available (reached end of dataset)")
+                    break
+            else:
+                consecutive_empty = 0
+                all_records.extend(records)
+                print(f"    Retrieved {len(records)} records (total: {len(all_records)})")
+
+            skip += page_size
+
+            # Safety check
+            if skip > 100000:
+                print("  Reached safety limit, stopping fetch")
+                break
+
+        if not all_records:
+            print("✗ No data received from API")
             return False
 
         # Convert to DataFrame
-        df = pd.json_normalize(records)
+        df = pd.json_normalize(all_records)
+
+        # Remove duplicates if any
+        df = df.drop_duplicates()
 
         # Save to Excel
         df.to_excel(output_file, index=False)
 
-        print(f"✓ Successfully saved {len(df)} records to {output_file}")
+        print(f"\n✓ Successfully saved {len(df)} historical records to {output_file}")
         print(f"  Columns: {', '.join(df.columns.tolist())}")
+        print(f"  Data spans from {df.iloc[0] if len(df) > 0 else 'N/A'} to {df.iloc[-1] if len(df) > 0 else 'N/A'}")
 
         return True
 
@@ -58,7 +89,7 @@ def fetch_and_convert_to_excel(api_key, output_file="train_data.xlsx"):
 
 if __name__ == "__main__":
     api_key = "vj6hIAi/T6uoy3zDpCGw1Q=="
-    output_file = "train_data.xlsx"
+    output_file = "lta_train_od_historical.xlsx"
 
     if len(sys.argv) > 1:
         api_key = sys.argv[1]

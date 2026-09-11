@@ -1,12 +1,12 @@
-# LTA Train Data Setup Guide
+# LTA Train Historical Data Setup Guide
 
-This guide explains how to automatically fetch Singapore LTA train Origin-Destination (OD) data using GitHub Actions.
+This guide explains how to fetch **all available historical** Singapore LTA train Origin-Destination (OD) data using GitHub Actions.
 
 ## What's Included
 
-- **fetch_lta_data.py** - Python script to fetch data from LTA API and save as Excel
+- **fetch_lta_data.py** - Python script to fetch all historical data from LTA API and save as Excel
 - **requirements.txt** - Python dependencies
-- **.github/workflows/fetch-lta-data.yml** - GitHub Actions workflow that runs automatically
+- **.github/workflows/fetch-lta-data.yml** - GitHub Actions workflow (manual trigger)
 
 ## Setup Steps
 
@@ -26,29 +26,33 @@ This guide explains how to automatically fetch Singapore LTA train Origin-Destin
 
 ### 3. Trigger the Workflow
 
-**Option A: Automatic (Recommended)**
-- The workflow runs automatically every day at 2 AM UTC (10 AM Singapore time)
-- The fetched data is saved as `lta_train_od_data.xlsx`
+The workflow runs **manually on-demand** (not automatically):
 
-**Option B: Manual**
 1. Go to **Actions** tab
-2. Select **Fetch LTA Train Data** workflow
-3. Click **Run workflow** → **Run workflow**
+2. Select **"Fetch LTA Train Historical Data"** workflow
+3. Click **Run workflow** (blue button)
+4. Click **Run workflow** again to confirm
+5. Wait for it to complete (may take a few minutes depending on data size)
+6. The historical data file will be saved and committed to the repo
+
+**Time to complete:** Depends on data size (typically 2-10 minutes)
 
 ## How It Works
 
 1. GitHub Actions runs the Python script on its servers (which have network access)
-2. The script fetches real-time data from the LTA API
-3. Data is converted to Excel format
+2. The script fetches **all available historical data** from the LTA API using pagination
+3. Data is converted to Excel format (removes duplicates automatically)
 4. The Excel file is automatically committed and pushed to your repository
-5. You can download the file from the repo whenever you need it
+5. You can download the complete historical dataset from the repo
 
 ## File Location
 
 After the workflow runs, you'll find the data file at:
 ```
-lta_train_od_data.xlsx
+lta_train_od_historical.xlsx
 ```
+
+This file contains all available OD records from the LTA API (can be thousands of records).
 
 ## Manual Usage
 
@@ -58,20 +62,26 @@ You can also run the script locally on any machine with network access:
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the script
-python3 fetch_lta_data.py "vj6hIAi/T6uoy3zDpCGw1Q==" "train_data.xlsx"
+# Run the script to fetch all historical data
+python3 fetch_lta_data.py "vj6hIAi/T6uoy3zDpCGw1Q==" "lta_train_od_historical.xlsx"
 ```
+
+This will fetch all available data from the LTA API and save it to the Excel file.
 
 ## Customization
 
-### Change Schedule
-Edit `.github/workflows/fetch-lta-data.yml`:
-- Line 7: Change the cron schedule (currently `0 2 * * *` = daily at 2 AM UTC)
-- Example: `0 0 * * 0` = weekly on Sunday at midnight
-
 ### Change Output Filename
 Edit `.github/workflows/fetch-lta-data.yml`:
-- Line 34: Change `"lta_train_od_data.xlsx"` to your preferred filename
+- Line 30: Change `"lta_train_od_historical.xlsx"` to your preferred filename
+
+### Automate Regular Fetches
+If you want the workflow to run periodically (e.g., weekly to get updates), edit `.github/workflows/fetch-lta-data.yml` and add:
+```yaml
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # Every Sunday at 2 AM UTC
+  workflow_dispatch:
+```
 
 ## Troubleshooting
 
