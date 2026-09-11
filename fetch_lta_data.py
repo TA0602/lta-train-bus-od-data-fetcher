@@ -144,9 +144,13 @@ def fetch_all_historical(api_key, output_file="lta_train_od_historical.csv", mon
 
 
 if __name__ == "__main__":
+    # LTA only publishes a rolling window of recent months (observed: last 3
+    # months return data, older months 404) — default to a small buffer
+    # instead of scanning far back and wasting API quota on months that
+    # will never have data.
     api_key = sys.argv[1] if len(sys.argv) > 1 else "***REMOVED***"
     output_file = sys.argv[2] if len(sys.argv) > 2 else "lta_train_od_historical.csv"
-    months_back = int(sys.argv[3]) if len(sys.argv) > 3 else 24
+    months_back = int(sys.argv[3]) if len(sys.argv) > 3 else 5
 
     success = fetch_all_historical(api_key, output_file, months_back)
     sys.exit(0 if success else 1)

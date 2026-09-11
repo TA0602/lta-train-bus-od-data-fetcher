@@ -24,7 +24,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch LTA historical data
-        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.csv" 24
+        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.csv" 5
         env:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
 
