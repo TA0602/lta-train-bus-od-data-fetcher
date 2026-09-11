@@ -32,13 +32,6 @@ jobs:
         env:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
 
-      - name: Zip reports (max compression)
-        id: zip
-        run: |
-          zip_name="lta_train_od_reports_${{ steps.pipeline.outputs.start }}_${{ steps.pipeline.outputs.end }}_$(date -u +%Y%m%dT%H%M%SZ).zip"
-          zip -9 -j "$zip_name" "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
-          echo "zip_path=$zip_name" >> "$GITHUB_OUTPUT"
-
       - name: Upload reports as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -46,7 +39,6 @@ jobs:
           path: |
             ${{ steps.pipeline.outputs.full_path }}
             ${{ steps.pipeline.outputs.ew1_path }}
-            ${{ steps.zip.outputs.zip_path }}
           retention-days: 30
 
       - name: Commit reports
@@ -69,6 +61,28 @@ jobs:
             echo "Email secrets not fully configured — skipping email step. See LTA_DATA_SETUP.md."
           fi
 
+      - name: Build email body
+        id: emailbody
+        if: steps.emailcheck.outputs.configured == 'true'
+        run: |
+          full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
+          ew1_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.ew1_path }}"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "html<<EOF"
+            cat <<HTML
+          <h2>LTA Train OD Data &mdash; Manual Fetch</h2>
+          <p>Data range: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
+          <p><strong>Download links:</strong></p>
+          <ul>
+            <li><a href="$full_url">Full dataset (all stations)</a></li>
+            <li><a href="$ew1_url">EW1-filtered dataset</a></li>
+          </ul>
+          <p style="color:#666;font-size:0.9em;">Triggered manually &middot; <a href="$run_url">View workflow run</a></p>
+          HTML
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Email the report
         if: steps.emailcheck.outputs.configured == 'true'
         uses: dawidd6/action-send-mail@v3
@@ -77,10 +91,8 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT || 587 }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "LTA Train OD Data (manual fetch): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
+          subject: "LTA Train OD Data (Manual): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
-          from: LTA Data Fetcher
-          body: |
-            Manual fetch complete for ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}.
-            Attached: full dataset + EW1-filtered workbook, zipped.
-          attachments: ${{ steps.zip.outputs.zip_path }}
+          from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
+          content_type: text/html
+          body: ${{ steps.emailbody.outputs.html }}

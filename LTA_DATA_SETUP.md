@@ -3,7 +3,7 @@
 This guide explains how this repo fetches Singapore LTA train
 Origin-Destination (OD) data from the `PV/ODTrain` DataMall API and
 publishes it as Excel workbooks — committed to the repo, uploaded as
-workflow artifacts, and (once configured) emailed to you as a zip.
+workflow artifacts, and (once configured) emailed to you as download links.
 
 ## How the API Actually Works
 
@@ -52,8 +52,8 @@ For example: `data/lta_train_od_full_2026-06_2026-08_20260911T044637Z.xlsx`
 - each workbook has **one sheet per month**, so no sheet risks exceeding
   Excel's 1,048,576-row limit
 
-Each run also zips both files together (**`zip -9`**, max compression, into
-one `.zip` — no other archive format) for the artifact/email attachment.
+The email step (once configured) links directly to these two committed
+files rather than attaching them — see the size note below.
 
 ## The Two Workflows
 
@@ -65,9 +65,10 @@ Trigger it yourself whenever you want a fresh pull:
 2. Click **Run workflow**
 
 Always fetches the last 3 published months (checking a 4th month as a
-boundary confirmation), builds two new dated files, zips them, uploads the
-artifact, commits to `main`, and emails the zip (once email is configured
-— see below) — regardless of whether this data was already fetched before.
+boundary confirmation), builds two new dated files, uploads them as an
+artifact, commits to `main`, and emails download links (once email is
+configured — see below) — regardless of whether this data was already
+fetched before.
 
 ### 2. Monthly Auto Fetch (`fetch-lta-data-monthly.yml`)
 
@@ -82,8 +83,8 @@ a day's buffer and 10 days of retry room). Each run:
 3. Otherwise, fetches fresh data. If the new month still isn't published,
    the run **fails on purpose** (a visible red run) — the next day's
    scheduled run retries
-4. If the new month **is** available: builds two new dated files, zips,
-   uploads, commits, and emails
+4. If the new month **is** available: builds two new dated files, uploads
+   as an artifact, commits, and emails download links
 
 You can also trigger it manually (`workflow_dispatch`) to test the logic
 without waiting for the schedule.
@@ -110,15 +111,19 @@ works without this. To enable email, add these secrets:
 | `NOTIFY_EMAIL_TO` | the recipient address |
 
 Email is sent via [`dawidd6/action-send-mail`](https://github.com/dawidd6/action-send-mail).
+The email is **not an attachment** — the full workbook is ~90MB and would
+be rejected by most mail servers (typical attachment caps are 20–25MB).
+Instead, the email body is an HTML message with direct download links
+(`raw.githubusercontent.com` URLs) to the two files just committed.
 
-**⚠️ Size caveat:** the zipped attachment can be large — the full-dataset
-workbook alone is roughly 90MB, since it's already XML/zip-compressed
-internally and doesn't shrink much further. Most mail providers cap
-attachments around 20–25MB, so this WILL likely be rejected by your mail
-server as an attachment. If that happens, options are: filter to a smaller
-subset before emailing, only email the small EW1 file, or switch the email
-body to a link to the GitHub file/artifact instead of an attachment (ask
-if you want this changed).
+**Sender identity:** most SMTP providers reject a `From` address that
+doesn't match the authenticated account (anti-spoofing), so the email is
+actually sent from whatever mailbox you set as `SMTP_USERNAME`, shown with
+the display name "LTA Data Fetcher".
+
+**Subject line:**
+- Manual runs: `LTA Train OD Data (Manual): <start> to <end>`
+- Monthly runs: `LTA Train OD Data (Auto): new month <month> published`
 
 ### 3. Enable the workflows
 
@@ -169,4 +174,4 @@ python3 build_reports.py lta_train_od_historical.csv some_output_ew1.xlsx EW1 # 
 - Expected when the new month isn't published yet. It retries automatically the next day within the 11th–20th window.
 
 **Email step didn't send anything**
-- Check the "Check email configuration" step's log — it prints which secrets are missing. Also check the size caveat above; a mail-server rejection due to attachment size won't necessarily show as a workflow failure.
+- Check the "Check email configuration" step's log — it prints which secrets are missing.

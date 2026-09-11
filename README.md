@@ -3,7 +3,7 @@
 Fetches Origin-Destination (OD) train passenger volume data from Singapore's
 [LTA DataMall](https://datamall.lta.gov.sg/) `PV/ODTrain` API and publishes
 it as multi-sheet Excel workbooks, committed to `data/`, uploaded as
-workflow artifacts, and (once configured) zipped and emailed.
+workflow artifacts, and (once configured) emailed to you as download links.
 
 ## What it does
 
@@ -29,9 +29,9 @@ Two GitHub Actions workflows keep this up to date — see
   API calls once that month's data is already covered, and retries daily
   until LTA publishes it
 
-Every successful run also zips both workbooks (`zip -9`, max compression)
-and emails them, once SMTP secrets are configured (optional — see setup
-guide for the size caveat on the full dataset).
+Every successful run also emails an HTML message with direct download
+links to both workbooks, once SMTP secrets are configured (optional — see
+setup guide; the files themselves are too large to attach directly).
 
 ## Files
 
