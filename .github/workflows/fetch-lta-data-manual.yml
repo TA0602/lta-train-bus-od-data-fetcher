@@ -1,0 +1,55 @@
+name: LTA Data - Manual Fetch
+
+on:
+  # Manual trigger from the Actions tab. Fetches the last 3 published
+  # months (checking a 4th as a boundary confirmation) regardless of
+  # whether the data already exists locally.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch LTA historical data
+        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.csv" 4
+        env:
+          LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
+
+      - name: Build multi-sheet reports
+        run: |
+          python3 build_reports.py lta_train_od_historical.csv lta_train_od_historical_by_month.xlsx
+          python3 build_reports.py lta_train_od_historical.csv lta_train_od_EW1_by_month.xlsx EW1
+
+      - name: Upload reports as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lta-train-od-reports
+          path: |
+            lta_train_od_historical_by_month.xlsx
+            lta_train_od_EW1_by_month.xlsx
+          retention-days: 30
+
+      - name: Commit reports
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add lta_train_od_historical_by_month.xlsx lta_train_od_EW1_by_month.xlsx
+          git commit -m "chore: manual fetch of LTA train OD data" || true
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
