@@ -1,0 +1,70 @@
+name: LTA Data - Resend Email
+
+on:
+  # Manual trigger only — emails download links for whatever the most
+  # recently built report pair in data/ is, without calling the LTA API.
+  # Useful for testing the email step itself, or re-sending a
+  # notification without re-fetching data.
+  workflow_dispatch:
+
+jobs:
+  resend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Find latest existing report files
+        id: pipeline
+        run: python3 resend_pipeline.py
+
+      - name: Check email configuration
+        id: emailcheck
+        run: |
+          if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.SMTP_USERNAME }}" ] && [ -n "${{ secrets.SMTP_PASSWORD }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Email secrets not fully configured — cannot send."
+          fi
+
+      - name: Build email body
+        id: emailbody
+        if: steps.emailcheck.outputs.configured == 'true'
+        run: |
+          full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
+          ew1_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.ew1_path }}"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "html<<EOF"
+            cat <<HTML
+          <h2>LTA Train OD Data &mdash; Resend</h2>
+          <p>Data range: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
+          <p><strong>Download links:</strong></p>
+          <ul>
+            <li><a href="$full_url">Full dataset (all stations)</a></li>
+            <li><a href="$ew1_url">EW1-filtered dataset</a></li>
+          </ul>
+          <p style="color:#666;font-size:0.9em;">Resent from already-fetched data (no new API call) &middot; <a href="$run_url">View workflow run</a></p>
+          HTML
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Email the report
+        if: steps.emailcheck.outputs.configured == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT || 587 }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "LTA Train OD Data (Resend): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
+          html_body: ${{ steps.emailbody.outputs.html }}
