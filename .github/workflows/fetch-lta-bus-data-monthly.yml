@@ -2,7 +2,7 @@ name: LTA Bus OD Data - Monthly Auto Fetch
 
 on:
   # LTA publishes each month's data by the 10th of the following month.
-  # Run daily from the 11th through the last day of the month at 01:15
+  # Run daily from the 11th through the last day of the month at 01:01
   # UTC (offset from the train workflow's 01:00 to avoid both hitting the
   # LTA API's short-window burst rate limit at the same moment); the
   # pipeline itself skips work (exit 0, no API calls) once that month's
@@ -13,7 +13,7 @@ on:
   # has no 31st), so this naturally runs through each month's actual last
   # day without needing month-specific ranges.
   schedule:
-    - cron: '15 1 11-31 * *'
+    - cron: '1 1 11-31 * *'
   workflow_dispatch:
 
 permissions:
