@@ -33,6 +33,23 @@ Every successful run also emails an HTML message with direct download
 links to both workbooks, once SMTP secrets are configured (optional — see
 setup guide; the files themselves are too large to attach directly).
 
+## ⚠️ Repository history was purged (2026-09-11)
+
+All git history prior to this notice was rewritten to strip every data
+file (all `.xlsx`/`.csv.gz` blobs over 100KB) from every commit — this
+removed accumulated test data from repo development, shrinking `.git`
+from ~427MB down to ~264KB. The `data/` folder is now empty; it's
+repopulated by the next manual or scheduled workflow run.
+
+This was a deliberate, one-time cleanup (via `git filter-repo` +
+force-push), done because the workflow design never overwrites or
+deletes old dated files — so without this, the old test-era files would
+have stayed in history forever. **If you have an existing local clone
+from before this date, it's now out of sync with `origin/main`'s
+history — re-clone rather than pulling.** All source code (scripts,
+workflows, docs) was preserved untouched; only accumulated binary data
+files were removed. See `HANDOVER.md` for full project context.
+
 ## Files
 
 - **`fetch_lta_data.py`** — fetches and merges historical OD train data into a CSV
