@@ -64,22 +64,29 @@ limit. The bus pipeline only ever builds the filtered workbook.
   train workflows (monthly runs at `01:01 UTC` instead of `01:00`, to
   avoid both hitting LTA's short-window rate limit at the same instant)
 
-## ⚠️ Repository history was purged (2026-09-11)
+## ⚠️ Repository history was rewritten twice (2026-09-11)
 
-All git history prior to this notice was rewritten to strip every data
-file (all `.xlsx`/`.csv.gz` blobs over 100KB) from every commit — this
-removed accumulated test data from repo development, shrinking `.git`
-from ~427MB down to ~264KB. The `data/` folder is now empty; it's
-repopulated by the next manual or scheduled workflow run.
+**If you have a local clone from before this date, re-clone rather than
+pulling — every commit hash has changed.**
 
-This was a deliberate, one-time cleanup (via `git filter-repo` +
-force-push), done because the workflow design never overwrites or
-deletes old dated files — so without this, the old test-era files would
-have stayed in history forever. **If you have an existing local clone
-from before this date, it's now out of sync with `origin/main`'s
-history — re-clone rather than pulling.** All source code (scripts,
-workflows, docs) was preserved untouched; only accumulated binary data
-files were removed. See `HANDOVER.md` for full project context.
+Two separate `git filter-repo` + force-push rewrites happened on the same
+day:
+
+1. **Data-file purge.** All `.xlsx`/`.csv.gz` blobs over 100KB were
+   stripped from every commit, shrinking `.git` from ~427MB to ~264KB.
+   This was needed because the workflow design never overwrites or deletes
+   old dated files, so test-era data would otherwise have stayed in
+   history forever. The `data/` folder is now empty; it's repopulated by
+   the next manual or scheduled workflow run.
+2. **Secret purge.** Both fetch scripts had carried a real LTA AccountKey
+   hardcoded as a CLI fallback default. It was removed from the code and
+   then redacted from every historical commit. **That key must be treated
+   as compromised and rotated at the LTA DataMall portal** — removing it
+   from history does not un-expose a value that was already public.
+
+All source code (scripts, workflows, docs) was preserved in both
+rewrites; only binary data and the leaked key were removed. See
+`HANDOVER.md` for full project context.
 
 ## Files
 
