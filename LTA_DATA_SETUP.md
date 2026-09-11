@@ -72,9 +72,9 @@ fetched before.
 
 ### 2. Monthly Auto Fetch (`fetch-lta-data-monthly.yml`)
 
-Runs on a schedule: **daily at 01:00 UTC from the 11th to the 20th of each
-month** (LTA publishes the previous month's data by the 10th, so this gives
-a day's buffer and 10 days of retry room). Each run:
+Runs on a schedule: **daily at 01:00 UTC from the 11th to the last day of
+each month** (LTA publishes the previous month's data by the 10th, so this
+gives a day's buffer and the rest of the month as retry room). Each run:
 
 1. Computes the target month (the most recently completed calendar month)
 2. If the newest `data/lta_train_od_full_*.xlsx` file's end-month already
@@ -176,7 +176,7 @@ python3 build_reports.py lta_train_od_historical.csv some_output_ew1.xlsx EW1 # 
 - Expected — LTA only publishes a rolling ~3-month window. The script logs which months it found data for.
 
 **Monthly workflow shows a red/failed run**
-- Expected when the new month isn't published yet. It retries automatically the next day within the 11th–20th window.
+- Expected when the new month isn't published yet. It retries automatically the next day, through the last day of the month.
 
 **Email step didn't send anything**
 - Check the "Check email configuration" step's log — it prints which secrets are missing.

@@ -25,7 +25,7 @@ Two GitHub Actions workflows keep this up to date — see
 **[LTA_DATA_SETUP.md](LTA_DATA_SETUP.md)** for the full explanation:
 
 - **Manual Fetch** — run on demand, always re-pulls the last 3-4 months and writes new files
-- **Monthly Auto Fetch** — runs daily from the 11th–20th of each month, skips
+- **Monthly Auto Fetch** — runs daily from the 11th to the last day of each month, skips
   API calls once that month's data is already covered, and retries daily
   until LTA publishes it
 

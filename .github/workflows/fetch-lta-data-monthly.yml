@@ -2,13 +2,16 @@ name: LTA Data - Monthly Auto Fetch
 
 on:
   # LTA publishes each month's data by the 10th of the following month.
-  # Run daily from the 11th through the 20th at 01:00 UTC; the pipeline
-  # itself skips work (exit 0, no API calls) once that month's data is
-  # already covered by an existing dated file, and exits non-zero (a
-  # visible "failed" run) if the data isn't published yet — so the next
-  # day's scheduled run retries.
+  # Run daily from the 11th through the last day of the month at 01:00
+  # UTC; the pipeline itself skips work (exit 0, no API calls) once that
+  # month's data is already covered by an existing dated file, and exits
+  # non-zero (a visible "failed" run) if the data isn't published yet —
+  # so the next day's scheduled run retries. Day-of-month "11-31" is safe
+  # for short months: cron simply never fires on a day that doesn't exist
+  # (e.g. Feb has no 31st), so this naturally runs through each month's
+  # actual last day without needing month-specific ranges.
   schedule:
-    - cron: '0 1 11-20 * *'
+    - cron: '0 1 11-31 * *'
   workflow_dispatch:
 
 permissions:
