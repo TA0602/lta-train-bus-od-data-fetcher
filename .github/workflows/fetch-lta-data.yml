@@ -1,10 +1,6 @@
-name: Fetch LTA Train Data
+name: Fetch LTA Train Historical Data
 
 on:
-  # Run daily at 2 AM UTC (10 AM Singapore time)
-  schedule:
-    - cron: '0 2 * * *'
-
   # Allow manual trigger from GitHub Actions tab
   workflow_dispatch:
 
@@ -26,8 +22,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Fetch LTA data
-        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_data.xlsx"
+      - name: Fetch LTA historical data
+        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.xlsx"
         env:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
 
@@ -35,8 +31,8 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add lta_train_od_data.xlsx
-          git commit -m "chore: update LTA train OD data" || true
+          git add lta_train_od_historical.xlsx
+          git commit -m "chore: fetch LTA train OD historical data" || true
           git push origin claude/modest-cannon-qzr926
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
