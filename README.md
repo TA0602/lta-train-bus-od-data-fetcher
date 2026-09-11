@@ -1,11 +1,12 @@
-# LTA Train OD Data Fetcher
+# LTA Train & Bus OD Data Fetcher
 
-Fetches Origin-Destination (OD) train passenger volume data from Singapore's
-[LTA DataMall](https://datamall.lta.gov.sg/) `PV/ODTrain` API and publishes
-it as multi-sheet Excel workbooks, committed to `data/`, uploaded as
-workflow artifacts, and (once configured) emailed to you as download links.
+Fetches Origin-Destination (OD) passenger volume data from Singapore's
+[LTA DataMall](https://datamall.lta.gov.sg/) — both the `PV/ODTrain` API
+(train stations) and the `PV/ODBus` API (bus stops) — and publishes each
+as multi-sheet Excel workbooks, committed to `data/`, uploaded as workflow
+artifacts, and (once configured) emailed to you as download links.
 
-## What it does
+## What it does (train)
 
 The `PV/ODTrain` endpoint doesn't return data rows directly — each call
 (for a given `Date=YYYYMM`) returns a link to a ZIP file containing that
@@ -33,7 +34,7 @@ Every successful run also emails an HTML message with direct download
 links to both workbooks, once SMTP secrets are configured (optional — see
 setup guide; the files themselves are too large to attach directly).
 
-## Bus OD data too
+## What it does (bus)
 
 The same pattern is mirrored for Singapore's `PV/ODBus` API (Passenger
 Volume by Origin Destination Bus Stops — same CSV schema as the train
@@ -72,10 +73,18 @@ files were removed. See `HANDOVER.md` for full project context.
 
 ## Files
 
+Train:
 - **`fetch_lta_train_data.py`** — fetches and merges historical OD train data into a CSV
-- **`build_reports.py`** — converts CSV → multi-sheet Excel, optionally filtered by station
 - **`train_pipeline_common.py`** — naming convention + "what's already covered" detection
 - **`manual_train_pipeline.py`** / **`monthly_train_pipeline.py`** — orchestrators for each workflow
+
+Bus:
+- **`fetch_lta_bus_data.py`** — fetches and merges historical OD bus data into a CSV
+- **`bus_pipeline_common.py`** — naming convention + "what's already covered" detection
+- **`manual_bus_pipeline.py`** / **`monthly_bus_pipeline.py`** — orchestrators for each workflow
+
+Shared:
+- **`build_reports.py`** — converts a CSV → multi-sheet Excel, optionally filtered by station/bus-stop code
 - **`requirements.txt`** — Python dependencies (`requests`, `openpyxl`)
 - **`.github/workflows/`** — the train and bus workflows described above,
   plus `resend-lta-train-email.yml` (re-sends the email for the most
@@ -86,10 +95,15 @@ files were removed. See `HANDOVER.md` for full project context.
 
 ```bash
 pip install -r requirements.txt
+
+# Train
 python3 manual_train_pipeline.py "<YOUR_LTA_API_KEY>" 4
+
+# Bus
+python3 manual_bus_pipeline.py "<YOUR_LTA_API_KEY>" 4
 ```
 
-Writes the two dated workbooks into `data/`.
+Writes the dated workbooks into `data/`.
 
 Get an API key from the [LTA DataMall Developer Portal](https://datamall.lta.gov.sg/content/datamall/en/request-for-api.html).
 
