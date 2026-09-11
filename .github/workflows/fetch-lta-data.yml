@@ -11,8 +11,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          ref: claude/modest-cannon-qzr926
 
       - name: Set up Python
         uses: actions/setup-python@v4
