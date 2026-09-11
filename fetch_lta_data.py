@@ -150,7 +150,7 @@ if __name__ == "__main__":
     # will never have data.
     api_key = sys.argv[1] if len(sys.argv) > 1 else "***REMOVED***"
     output_file = sys.argv[2] if len(sys.argv) > 2 else "lta_train_od_historical.csv"
-    months_back = int(sys.argv[3]) if len(sys.argv) > 3 else 5
+    months_back = int(sys.argv[3]) if len(sys.argv) > 3 else 4
 
     success = fetch_all_historical(api_key, output_file, months_back)
     sys.exit(0 if success else 1)
