@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
 LTA OD Train Historical Data Fetcher
-Fetches all available Origin-Destination train data from Singapore LTA API and saves to Excel
+Fetches all available Origin-Destination train data from Singapore LTA API and saves to CSV
 """
 
 import requests
-import pandas as pd
+import csv
 import sys
-from datetime import datetime, timedelta
+import json
 
-def fetch_and_convert_to_excel(api_key, output_file="lta_train_od_historical.xlsx"):
+def fetch_and_save_to_csv(api_key, output_file="lta_train_od_historical.csv"):
     """
-    Fetch all available train OD historical data from LTA API and save to Excel
+    Fetch all available train OD historical data from LTA API and save to CSV
 
     Args:
         api_key: LTA API key (AccountKey)
-        output_file: Output Excel filename
+        output_file: Output CSV filename
     """
     try:
         print("Fetching historical data from LTA API...")
@@ -28,15 +28,15 @@ def fetch_and_convert_to_excel(api_key, output_file="lta_train_od_historical.xls
         base_url = "https://datamall2.mytransport.sg/ltaodataservice/PV/ODTrain"
         all_records = []
 
-        # Try to fetch with pagination (LTA API typically uses $skip parameter)
+        # Fetch with pagination (LTA API uses $skip parameter)
         skip = 0
         page_size = 500
-        max_records = 50000  # Limit to avoid overwhelming the API
+        max_records = 50000
         consecutive_empty = 0
 
         while len(all_records) < max_records:
             url = f"{base_url}?$skip={skip}"
-            print(f"  Fetching page {skip // page_size + 1} (records {skip}-{skip + page_size})...")
+            print(f"  Fetching records {skip}-{skip + page_size}...")
 
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
@@ -47,7 +47,7 @@ def fetch_and_convert_to_excel(api_key, output_file="lta_train_od_historical.xls
             if not records:
                 consecutive_empty += 1
                 if consecutive_empty >= 2:
-                    print(f"  No more data available (reached end of dataset)")
+                    print(f"  Reached end of dataset")
                     break
             else:
                 consecutive_empty = 0
@@ -56,7 +56,6 @@ def fetch_and_convert_to_excel(api_key, output_file="lta_train_od_historical.xls
 
             skip += page_size
 
-            # Safety check
             if skip > 100000:
                 print("  Reached safety limit, stopping fetch")
                 break
@@ -65,18 +64,29 @@ def fetch_and_convert_to_excel(api_key, output_file="lta_train_od_historical.xls
             print("✗ No data received from API")
             return False
 
-        # Convert to DataFrame
-        df = pd.json_normalize(all_records)
+        # Remove duplicates
+        seen = set()
+        unique_records = []
+        for record in all_records:
+            record_str = json.dumps(record, sort_keys=True)
+            if record_str not in seen:
+                seen.add(record_str)
+                unique_records.append(record)
 
-        # Remove duplicates if any
-        df = df.drop_duplicates()
+        # Get all keys from records
+        all_keys = set()
+        for record in unique_records:
+            all_keys.update(record.keys())
+        fieldnames = sorted(list(all_keys))
 
-        # Save to Excel
-        df.to_excel(output_file, index=False)
+        # Write to CSV
+        with open(output_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(unique_records)
 
-        print(f"\n✓ Successfully saved {len(df)} historical records to {output_file}")
-        print(f"  Columns: {', '.join(df.columns.tolist())}")
-        print(f"  Data spans from {df.iloc[0] if len(df) > 0 else 'N/A'} to {df.iloc[-1] if len(df) > 0 else 'N/A'}")
+        print(f"\n✓ Successfully saved {len(unique_records)} historical records to {output_file}")
+        print(f"  Columns: {', '.join(fieldnames)}")
 
         return True
 
@@ -89,12 +99,12 @@ def fetch_and_convert_to_excel(api_key, output_file="lta_train_od_historical.xls
 
 if __name__ == "__main__":
     api_key = "***REMOVED***"
-    output_file = "lta_train_od_historical.xlsx"
+    output_file = "lta_train_od_historical.csv"
 
     if len(sys.argv) > 1:
         api_key = sys.argv[1]
     if len(sys.argv) > 2:
         output_file = sys.argv[2]
 
-    success = fetch_and_convert_to_excel(api_key, output_file)
+    success = fetch_and_save_to_csv(api_key, output_file)
     sys.exit(0 if success else 1)

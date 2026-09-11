@@ -23,7 +23,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Fetch LTA historical data
-        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.xlsx"
+        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.csv"
         env:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
 
@@ -31,8 +31,8 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add lta_train_od_historical.xlsx
+          git add lta_train_od_historical.csv
           git commit -m "chore: fetch LTA train OD historical data" || true
-          git push origin claude/modest-cannon-qzr926
+          git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
