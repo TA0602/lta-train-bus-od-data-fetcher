@@ -11,13 +11,12 @@ overwrites a previous run's output):
     data/lta_bus_od_77009_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
 """
 
-import csv
 import glob
 import os
 import re
 from datetime import datetime, timezone
 
-from build_reports import build_workbook
+from build_reports import build_workbooks
 
 DATA_DIR = "data"
 STATION = "77009"
@@ -28,36 +27,27 @@ STATION_PREFIX = "lta_bus_od_77009"
 _FILENAME_RE = re.compile(r"_(\d{4}-\d{2})_(\d{4}-\d{2})_\d{8}T\d{6}Z\.xlsx$")
 
 
-def month_range(csv_path):
-    """Return (earliest, latest) YEAR_MONTH values ('YYYY-MM') found in the CSV."""
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        idx = header.index("YEAR_MONTH")
-        months = {row[idx] for row in reader}
-    return min(months), max(months)
-
-
 def run_timestamp():
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def build_named_reports(csv_path, out_dir=DATA_DIR):
+def build_named_reports(csv_path, start, end, out_dir=DATA_DIR):
     """Build the full + bus-stop-filtered workbooks with the naming convention above.
 
-    Returns (full_path, station_path, start_month, end_month).
+    `start`/`end` come from the fetch step, which already knows which months
+    it wrote — deriving them here would mean another full scan of the CSV.
+
+    Returns (full_path, station_path).
     """
     os.makedirs(out_dir, exist_ok=True)
-    start, end = month_range(csv_path)
     ts = run_timestamp()
 
     full_path = os.path.join(out_dir, f"{FULL_PREFIX}_{start}_{end}_{ts}.xlsx")
     station_path = os.path.join(out_dir, f"{STATION_PREFIX}_{start}_{end}_{ts}.xlsx")
 
-    build_workbook(csv_path, full_path)
-    build_workbook(csv_path, station_path, station=STATION)
+    build_workbooks(csv_path, [(full_path, None), (station_path, STATION)])
 
-    return full_path, station_path, start, end
+    return full_path, station_path
 
 
 def latest_end_month_covered(out_dir=DATA_DIR):

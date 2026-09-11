@@ -12,7 +12,6 @@ commit, and exits non-zero when the new month isn't published yet so the
 workflow's daily retry has something to act on.
 """
 
-import csv
 import os
 import sys
 from datetime import date
@@ -32,14 +31,6 @@ def target_month_dash():
         month = 12
         year -= 1
     return f"{year}-{month:02d}"
-
-
-def months_in_csv(csv_path):
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        idx = header.index("YEAR_MONTH")
-        return {row[idx] for row in reader}
 
 
 def set_output(name, value):
@@ -67,20 +58,20 @@ def main():
     # Only fetch the one new target month — older months never change once
     # published and are already covered by a previous run's committed
     # file, so re-fetching them here would just waste API quota.
-    success = fetch_all_historical(api_key, CSV_TMP, months_back=1)
+    months = fetch_all_historical(api_key, CSV_TMP, months_back=1)
 
-    if not success:
+    if not months:
         print(f"No data available yet for {dash_month}.")
         set_output("updated", "false")
         sys.exit(1)
 
-    found_months = months_in_csv(CSV_TMP)
-    if dash_month not in found_months:
-        print(f"Fetch succeeded but {dash_month} still isn't published (found: {sorted(found_months)}).")
+    if dash_month not in months:
+        print(f"Fetch succeeded but {dash_month} still isn't published (found: {months}).")
         set_output("updated", "false")
         sys.exit(1)
 
-    full_path, station_path, start, end = build_named_reports(CSV_TMP)
+    start, end = months[0], months[-1]
+    full_path, station_path = build_named_reports(CSV_TMP, start, end)
     print(f"Built {full_path} and {station_path} covering {start}..{end}.")
 
     set_output("updated", "true")

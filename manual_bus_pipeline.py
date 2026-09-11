@@ -29,12 +29,13 @@ def main():
     api_key = sys.argv[1]
     months_back = int(sys.argv[2]) if len(sys.argv) > 2 else 4
 
-    success = fetch_all_historical(api_key, CSV_TMP, months_back=months_back)
-    if not success:
+    months = fetch_all_historical(api_key, CSV_TMP, months_back=months_back)
+    if not months:
         print("Fetch failed — no data retrieved.")
         sys.exit(1)
 
-    full_path, station_path, start, end = build_named_reports(CSV_TMP)
+    start, end = months[0], months[-1]
+    full_path, station_path = build_named_reports(CSV_TMP, start, end)
     print(f"Built {full_path} and {station_path} covering {start}..{end}.")
 
     set_output("full_path", full_path)

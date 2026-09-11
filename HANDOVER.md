@@ -116,7 +116,14 @@ data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
    flat CSV with 2.68M rows opened directly in Excel truncates mid-file
    with no obvious error to a casual user (June shows complete, July
    shows partial, August never loads) — this is why the whole
-   multi-sheet-by-month design exists.
+   multi-sheet-by-month design exists. **The limit is per *sheet*, so
+   one-sheet-per-month is not by itself a guarantee** — it only held
+   because a month of *train* data fits. A month of bus OD data is
+   considerably larger (far more bus stops than train stations), so
+   `build_reports.py` now continues an oversized month onto
+   `<month> (2)`, `<month> (3)`, ... rather than emitting a workbook
+   Excel silently truncates. openpyxl will *not* warn you about this on
+   its own.
 
 8. **This repo was renamed mid-project**: `TA0602/Hi` →
    `TA0602/lta-train-od-data-fetcher`. If `git remote -v` ever shows the
@@ -126,6 +133,61 @@ data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
 9. **The old `claude/modest-cannon-qzr926` feature branch was deleted**
    (both locally and on GitHub) after confirming it was fully merged into
    `main` with no unique commits. `main` is the only branch now.
+
+## 🔑 ACTION REQUIRED: rotate the leaked LTA API key
+
+Until 2026-09-11 both fetch scripts carried a **real-looking LTA
+AccountKey hardcoded as a CLI fallback default**:
+
+```python
+api_key = sys.argv[1] if len(sys.argv) > 1 else "***REMOVED***"
+```
+
+It has been removed from the source (the scripts now require the key as
+argv[1] and exit 2 without it), **but removing it from the working tree
+does not remove it from git history** — it is still reachable in every
+commit before this one. If that key is live, treat it as compromised:
+request a replacement from the LTA DataMall portal, update the
+`LTA_API_KEY` repo secret, and purge the old value from history (the same
+`git filter-repo` route already used once for the data-file purge).
+
+## The 2026-09-11 fetch/report refactor
+
+The original fetch+report path was written early and had accumulated real
+inefficiencies and a few latent failure modes. All of the following
+changed together:
+
+- **Rows are no longer buffered in memory.** `fetch_all_historical` used
+  to accumulate every month's rows in one `all_rows` list of dicts and
+  write the CSV at the very end. It now streams each row straight to the
+  output CSV with `csv.writer`, and ZIPs stream to a temp file instead of
+  `io.BytesIO(response.content)` (which held two full copies of the
+  compressed archive in RAM at once).
+- **`csv.DictReader`/`DictWriter` → `csv.reader`/`writer`.** A dict per
+  row is substantially heavier than a list, and nothing needed the dict.
+- **`_SourceMonth` is gone.** It was written to every single row and
+  never read by anything — `YEAR_MONTH` (already in LTA's schema) is what
+  every consumer actually uses.
+- **The CSV is read once, not 3-4 times.** `month_range()` and
+  `months_in_csv()` both did full scans to recover facts the fetch step
+  already knew; `fetch_all_historical` now *returns* the sorted months it
+  wrote, and `build_named_reports(csv_path, start, end)` takes them as
+  arguments. The two workbooks (full + filtered) are built in one shared
+  pass via `build_workbooks()` instead of one pass each.
+- **Error classification is no longer lossy.** Previously *every*
+  `HTTPError` was logged as "No data / error for <month>" and skipped, so
+  a 429 throttle or a 401 bad-key looked identical to "this month isn't
+  published yet" — which in the monthly pipeline burns a daily retry on a
+  false negative. Now 404 means no data, 429/`QuotaViolation` raises
+  `QuotaExceeded` and stops the run, 5xx retries with backoff, and other
+  4xx propagate loudly.
+- **Transient failures retry** (3 attempts, exponential backoff) instead
+  of permanently dropping that month from the run.
+- **A filter matching zero rows no longer aborts the run.** It used to
+  `raise SystemExit` from inside `build_workbook` — *after* the full
+  workbook had already been written — leaving `data/` half-populated and
+  the workflow's `git add` of both paths failing. It now writes a
+  header-only workbook and prints a warning.
 
 ## Open items / things the next session might need to pick up
 
