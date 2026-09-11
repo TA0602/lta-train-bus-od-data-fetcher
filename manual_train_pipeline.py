@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Orchestrator for the on-demand workflow: always fetches fresh data and
-always writes new, uniquely-named files (never overwrites a prior run's
-output).
+Orchestrator for the on-demand train workflow: always fetches fresh data
+and always writes new, uniquely-named files (never overwrites a prior
+run's output). Each month fetched becomes its own pair of workbooks.
 """
 
 import os
 import sys
 
 from fetch_lta_train_data import fetch_all_historical
-from train_pipeline_common import build_named_reports
+from train_pipeline_common import build_named_reports, write_file_list
 
 CSV_TMP = "lta_train_od_historical.csv"
 
@@ -34,14 +34,21 @@ def main():
         print("Fetch failed — no data retrieved.")
         sys.exit(1)
 
-    start, end = months[0], months[-1]
-    full_path, ew1_path = build_named_reports(CSV_TMP, start, end)
-    print(f"Built {full_path} and {ew1_path} covering {start}..{end}.")
+    full_by_month, ew1_by_month, ts = build_named_reports(CSV_TMP)
 
-    set_output("full_path", full_path)
-    set_output("ew1_path", ew1_path)
-    set_output("start", start)
-    set_output("end", end)
+    paths = [full_by_month[m] for m in sorted(full_by_month)]
+    paths += [ew1_by_month[m] for m in sorted(ew1_by_month)]
+    if not paths:
+        print("Fetch succeeded but no workbooks were produced.")
+        sys.exit(1)
+
+    write_file_list(paths)
+    print(f"Built {len(paths)} file(s) across {len(full_by_month)} month(s): {', '.join(sorted(full_by_month))}")
+
+    set_output("ts", ts)
+    set_output("count", len(full_by_month))
+    set_output("start", months[0])
+    set_output("end", months[-1])
 
 
 if __name__ == "__main__":

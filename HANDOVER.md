@@ -7,10 +7,9 @@ things were discovered the hard way.
 ## What this project is
 
 Fetches Singapore LTA train Origin-Destination (OD) passenger volume data
-from the LTA DataMall `PV/ODTrain` API and publishes it as multi-sheet
-Excel workbooks (one sheet per month, to stay under Excel's 1,048,576-row
-limit), committed to `data/`, uploaded as workflow artifacts, and emailed
-as download links.
+from the LTA DataMall `PV/ODTrain` API (and bus OD data from `PV/ODBus`)
+and publishes it as **one Excel workbook per month**, committed to
+`data/`, uploaded as workflow artifacts, and emailed as download links.
 
 Repo: `TA0602/lta-train-od-data-fetcher` (renamed from `TA0602/Hi` partway
 through development — old bookmarks/clones using the `Hi` name still
@@ -39,18 +38,28 @@ resolve via GitHub's redirect, but update them).
 
 ```
 fetch_lta_train_data.py       — talks to the LTA API, downloads/extracts ZIPs, writes a flat CSV
-build_reports.py        — CSV -> multi-sheet xlsx (one sheet per YEAR_MONTH), optional station filter
-train_pipeline_common.py      — naming convention + "what month range is already covered in data/" detection
+build_reports.py        — CSV -> one xlsx per YEAR_MONTH, optional station/bus-stop filter
+train_pipeline_common.py      — naming convention + "what month is already covered in data/" detection
 manual_train_pipeline.py      — orchestrator: always fetch + always write new dated files (no coverage check)
 monthly_train_pipeline.py     — orchestrator: check coverage first, skip if already have target month, else fetch ONLY that 1 month
-resend_train_pipeline.py      — finds latest existing data/ file pair, no API call — used to resend email / test email formatting cheaply
+resend_train_pipeline.py      — finds the latest run's data/ files (grouped by run timestamp), no API call — used to resend email / test email formatting cheaply
 ```
 
-Naming convention (sorts chronologically as plain text, never overwritten):
+Naming convention — **one file per month** (sorts chronologically as plain
+text, never overwritten; changed 2026-09-11 from a start/end range to a
+single month per file):
 ```
-data/lta_train_od_full_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
-data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+data/lta_train_od_full_<YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+data/lta_train_od_EW1_<YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+data/lta_bus_od_77009_<YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
 ```
+
+A manual run covering 3 months writes 3 files per target, not one file
+with 3 sheets. Every file from one run shares that run's timestamp, which
+is how the workflows glob them (`data/*_<ts>.xlsx`) and how
+`resend_train_pipeline.py` regroups a run. The pipelines also write
+`report_files.txt` (gitignored) listing exactly what they produced, which
+is what the workflows feed to `git add` and to the email link list.
 
 ### The two real workflows
 

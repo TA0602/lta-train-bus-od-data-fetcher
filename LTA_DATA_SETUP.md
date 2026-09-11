@@ -25,7 +25,7 @@ confirmed empirically too (older months return 404).
 ## Files
 
 - **`fetch_lta_train_data.py`** — fetches and merges historical OD train data into a CSV
-- **`build_reports.py`** — converts a CSV into a multi-sheet Excel workbook (one sheet per month), optionally filtered to one station code
+- **`build_reports.py`** — splits a CSV into one Excel workbook per month, optionally filtered to one station code
 - **`train_pipeline_common.py`** — shared naming convention + "what's already covered" detection
 - **`manual_train_pipeline.py`** — orchestrator for the on-demand workflow (always fetches + writes new files)
 - **`monthly_train_pipeline.py`** — orchestrator for the scheduled workflow (idempotent, quota-aware)
@@ -34,26 +34,37 @@ confirmed empirically too (older months return 404).
 
 ## Output Files & Naming Convention
 
-Every successful run (manual or scheduled) writes **two new files** into
-the **`data/`** folder — it never overwrites a previous run's output:
+Every successful run (manual or scheduled) writes **one pair of files per
+month fetched** into the **`data/`** folder — it never overwrites a
+previous run's output:
 
 ```
-data/lta_train_od_full_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
-data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+data/lta_train_od_full_<YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+data/lta_train_od_EW1_<YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
 ```
 
-For example: `data/lta_train_od_full_2026-06_2026-08_20260911T044637Z.xlsx`
+For example, a manual run covering three months writes six files:
 
-- `start`/`end` are the actual months of data contained in the file (so
-  filenames sort chronologically as plain text)
-- the trailing run timestamp makes every run's output unique
+```
+data/lta_train_od_full_2026-06_20260911T044637Z.xlsx
+data/lta_train_od_full_2026-07_20260911T044637Z.xlsx
+data/lta_train_od_full_2026-08_20260911T044637Z.xlsx
+data/lta_train_od_EW1_2026-06_20260911T044637Z.xlsx
+data/lta_train_od_EW1_2026-07_20260911T044637Z.xlsx
+data/lta_train_od_EW1_2026-08_20260911T044637Z.xlsx
+```
+
+- each file holds exactly **one month** of data (so filenames sort
+  chronologically as plain text)
+- every file from the same run shares that run's timestamp, which is what
+  makes each run's output unique and groupable
 - `full` = all stations; `EW1` = filtered to rows where station `EW1` is
   the origin or destination
-- each workbook has **one sheet per month**, so no sheet risks exceeding
-  Excel's 1,048,576-row limit
+- a month is normally one sheet; if it would exceed Excel's
+  1,048,576-row per-sheet limit it continues onto `<month> (2)`, `(3)`, ...
 
-The email step (once configured) links directly to these two committed
-files rather than attaching them — see the size note below.
+The email step (once configured) links directly to each committed file
+rather than attaching them — see the size note below.
 
 ## The Two Workflows
 
@@ -86,10 +97,9 @@ gives a day's buffer and the rest of the month as retry room). Each run:
    so re-fetching them here would just waste quota for nothing. If the
    new month still isn't published, the run **fails on purpose** (a
    visible red run) — the next day's scheduled run retries
-4. If the new month **is** available: builds two new dated files (this
-   run's file covers only that single month, e.g.
-   `..._2026-08_2026-08_...xlsx`), uploads as an artifact, commits, and
-   emails download links
+4. If the new month **is** available: builds that month's two files
+   (e.g. `..._2026-08_<run-timestamp>.xlsx`), uploads as an artifact,
+   commits, and emails download links
 
 You can also trigger it manually (`workflow_dispatch`) to test the logic
 without waiting for the schedule.
@@ -153,12 +163,13 @@ pip install -r requirements.txt
 python3 manual_train_pipeline.py "<YOUR_LTA_API_KEY>" 4
 ```
 
-This writes the two dated files into `data/`. Or run the pieces individually:
+This writes one pair of dated files per month into `data/`. Or run the pieces individually:
 
 ```bash
 python3 fetch_lta_train_data.py "<YOUR_LTA_API_KEY>" "lta_train_od_historical.csv" 4
-python3 build_reports.py lta_train_od_historical.csv some_output.xlsx        # all stations
-python3 build_reports.py lta_train_od_historical.csv some_output_ew1.xlsx EW1 # station filter
+python3 build_reports.py lta_train_od_historical.csv some_prefix        # all stations
+python3 build_reports.py lta_train_od_historical.csv some_prefix_ew1 EW1 # station filter
+# each writes <prefix>_<YYYY-MM>.xlsx per month present
 ```
 
 ## Troubleshooting

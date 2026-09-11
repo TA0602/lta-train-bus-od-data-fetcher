@@ -3,7 +3,7 @@
 Fetches Origin-Destination (OD) passenger volume data from Singapore's
 [LTA DataMall](https://datamall.lta.gov.sg/) — both the `PV/ODTrain` API
 (train stations) and the `PV/ODBus` API (bus stops) — and publishes each
-as multi-sheet Excel workbooks, committed to `data/`, uploaded as workflow
+as one Excel workbook per month, committed to `data/`, uploaded as workflow
 artifacts, and (once configured) emailed to you as download links.
 
 ## What it does (train)
@@ -11,16 +11,19 @@ artifacts, and (once configured) emailed to you as download links.
 The `PV/ODTrain` endpoint doesn't return data rows directly — each call
 (for a given `Date=YYYYMM`) returns a link to a ZIP file containing that
 month's CSV of trip counts between stations. The pipeline queries the last
-few months, downloads and extracts each available ZIP, merges them, and
-builds two dated Excel workbooks per run:
+few months, downloads and extracts each available ZIP, and builds **one
+workbook per month** — a run covering three months writes three full
+workbooks and three EW1 workbooks, not one of each holding three sheets:
 
 ```
-data/lta_train_od_full_<start>_<end>_<run-timestamp>.xlsx   — all stations
-data/lta_train_od_EW1_<start>_<end>_<run-timestamp>.xlsx    — station EW1 only
+data/lta_train_od_full_<YYYY-MM>_<run-timestamp>.xlsx   — all stations
+data/lta_train_od_EW1_<YYYY-MM>_<run-timestamp>.xlsx    — station EW1 only
 ```
 
-Both are split one sheet per month (so no sheet risks exceeding Excel's
-1,048,576-row limit) and never overwrite a previous run's files.
+Every run stamps its own timestamp, so a run never overwrites a previous
+run's files. Within a month's file the data is normally a single sheet; a
+month large enough to exceed Excel's 1,048,576-row per-sheet limit
+continues onto `<month> (2)`, `<month> (3)`, ...
 
 Two GitHub Actions workflows keep this up to date — see
 **[LTA_DATA_SETUP.md](LTA_DATA_SETUP.md)** for the full explanation:
@@ -31,7 +34,7 @@ Two GitHub Actions workflows keep this up to date — see
   until LTA publishes it
 
 Every successful run also emails an HTML message with direct download
-links to both workbooks, once SMTP secrets are configured (optional — see
+links to every file it produced, once SMTP secrets are configured (optional — see
 setup guide; the files themselves are too large to attach directly).
 
 ## What it does (bus)
@@ -41,8 +44,10 @@ Volume by Origin Destination Bus Stops — same CSV schema as the train
 endpoint, but `ORIGIN_PT_CODE`/`DESTINATION_PT_CODE` are bus stop codes):
 
 ```
-data/lta_bus_od_77009_<start>_<end>_<run-timestamp>.xlsx   — bus stop 77009 only
+data/lta_bus_od_77009_<YYYY-MM>_<run-timestamp>.xlsx   — bus stop 77009 only
 ```
+
+Same one-file-per-month convention as train.
 
 **There is deliberately no "full" (all bus stops) workbook.** Singapore has
 far more bus stops than train stations, so the unfiltered dataset came out
@@ -89,7 +94,7 @@ Bus:
 - **`manual_bus_pipeline.py`** / **`monthly_bus_pipeline.py`** — orchestrators for each workflow
 
 Shared:
-- **`build_reports.py`** — converts a CSV → multi-sheet Excel, optionally filtered by station/bus-stop code
+- **`build_reports.py`** — splits a CSV into one Excel workbook per month, optionally filtered by station/bus-stop code
 - **`requirements.txt`** — Python dependencies (`requests`, `openpyxl`)
 - **`.github/workflows/`** — the train and bus workflows described above,
   plus `resend-lta-train-email.yml` (re-sends the email for the most
@@ -108,7 +113,7 @@ python3 manual_train_pipeline.py "<YOUR_LTA_API_KEY>" 4
 python3 manual_bus_pipeline.py "<YOUR_LTA_API_KEY>" 4
 ```
 
-Writes the dated workbooks into `data/`.
+Writes one dated workbook per month into `data/`.
 
 Get an API key from the [LTA DataMall Developer Portal](https://datamall.lta.gov.sg/content/datamall/en/request-for-api.html).
 

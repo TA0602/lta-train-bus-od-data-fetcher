@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
 Orchestrator for the on-demand bus OD workflow: always fetches fresh data
-and always writes a new, uniquely-named file (never overwrites a prior
-run's output).
+and always writes new, uniquely-named files (never overwrites a prior
+run's output). Each month fetched becomes its own workbook.
 """
 
 import os
 import sys
 
 from fetch_lta_bus_data import fetch_all_historical
-from bus_pipeline_common import build_named_reports
+from bus_pipeline_common import build_named_reports, write_file_list
 
 CSV_TMP = "lta_bus_od_historical.csv"
 
@@ -34,13 +34,20 @@ def main():
         print("Fetch failed — no data retrieved.")
         sys.exit(1)
 
-    start, end = months[0], months[-1]
-    station_path = build_named_reports(CSV_TMP, start, end)
-    print(f"Built {station_path} covering {start}..{end}.")
+    station_by_month, ts = build_named_reports(CSV_TMP)
 
-    set_output("station_path", station_path)
-    set_output("start", start)
-    set_output("end", end)
+    paths = [station_by_month[m] for m in sorted(station_by_month)]
+    if not paths:
+        print("Fetch succeeded but no rows involved the configured bus stop — nothing to publish.")
+        sys.exit(1)
+
+    write_file_list(paths)
+    print(f"Built {len(paths)} file(s): {', '.join(sorted(station_by_month))}")
+
+    set_output("ts", ts)
+    set_output("count", len(station_by_month))
+    set_output("start", months[0])
+    set_output("end", months[-1])
 
 
 if __name__ == "__main__":

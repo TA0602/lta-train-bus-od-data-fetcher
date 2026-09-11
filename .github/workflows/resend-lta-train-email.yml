@@ -41,22 +41,21 @@ jobs:
         id: emailbody
         if: steps.emailcheck.outputs.configured == 'true'
         run: |
-          full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
-          ew1_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.ew1_path }}"
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           {
-            echo "html<<EOF"
-            cat <<HTML
-          <h2>LTA Train OD Data &mdash; Resend</h2>
-          <p>Data range: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
-          <p><strong>Download links:</strong></p>
-          <ul>
-            <li><a href="$full_url">Full dataset (all stations)</a></li>
-            <li><a href="$ew1_url">EW1-filtered dataset</a></li>
-          </ul>
-          <p style="color:#666;font-size:0.9em;">Resent from already-fetched data (no new API call) &middot; <a href="$run_url">View workflow run</a></p>
-          HTML
-            echo "EOF"
+            echo "html<<HTMLEOF"
+            echo "<h2>LTA Train OD Data &mdash; Resend</h2>"
+            echo "<p>Months: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong> (${{ steps.pipeline.outputs.count }} month(s))</p>"
+            echo "<p><strong>Download links (one file per month):</strong></p>"
+            echo "<ul>"
+            while IFS= read -r p; do
+              [ -n "$p" ] || continue
+              url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/$p"
+              echo "  <li><a href=\"$url\">$(basename "$p")</a></li>"
+            done < report_files.txt
+            echo "</ul>"
+            echo "<p style=\"color:#666;font-size:0.9em;\">Resent from already-fetched data (no new API call) &middot; <a href=\"$run_url\">View workflow run</a></p>"
+            echo "HTMLEOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Email the report

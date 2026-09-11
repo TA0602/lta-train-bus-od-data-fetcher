@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """
 Shared helpers: naming convention, output folder, and month-coverage
-detection used by both the manual and scheduled pipelines.
+detection used by both the manual and scheduled train pipelines.
 
-Naming convention (sorts chronologically as plain filenames, and never
-overwrites a previous run's output):
+One file per month — a run covering three months writes three full
+workbooks and three EW1 workbooks, not one of each with three sheets:
 
-    data/lta_train_od_full_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
-    data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+    data/lta_train_od_full_<YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+    data/lta_train_od_EW1_<YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
+
+(sorts chronologically as a plain filename, and never overwrites a previous
+run's output — every run stamps its own timestamp)
 """
 
 import glob
@@ -15,7 +18,7 @@ import os
 import re
 from datetime import datetime, timezone
 
-from build_reports import build_workbooks
+from build_reports import build_monthly_workbooks
 
 DATA_DIR = "data"
 STATION = "EW1"
@@ -23,40 +26,51 @@ STATION = "EW1"
 FULL_PREFIX = "lta_train_od_full"
 EW1_PREFIX = "lta_train_od_EW1"
 
-_FILENAME_RE = re.compile(r"_(\d{4}-\d{2})_(\d{4}-\d{2})_\d{8}T\d{6}Z\.xlsx$")
+FILE_LIST = "report_files.txt"
+
+_FILENAME_RE = re.compile(r"_(\d{4}-\d{2})_(\d{8}T\d{6}Z)\.xlsx$")
 
 
 def run_timestamp():
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def build_named_reports(csv_path, start, end, out_dir=DATA_DIR):
-    """Build the full + EW1-filtered workbooks with the naming convention above.
+def build_named_reports(csv_path, out_dir=DATA_DIR):
+    """Build one full + one EW1 workbook for each month present in csv_path.
 
-    `start`/`end` come from the fetch step, which already knows which months
-    it wrote — deriving them here would mean another full scan of the CSV.
-
-    Returns (full_path, ew1_path).
+    Returns (full_by_month, ew1_by_month, ts), the first two being
+    {YYYY-MM: path} dicts and ts the shared run timestamp.
     """
     os.makedirs(out_dir, exist_ok=True)
     ts = run_timestamp()
 
-    full_path = os.path.join(out_dir, f"{FULL_PREFIX}_{start}_{end}_{ts}.xlsx")
-    ew1_path = os.path.join(out_dir, f"{EW1_PREFIX}_{start}_{end}_{ts}.xlsx")
+    full_by_month, ew1_by_month = build_monthly_workbooks(
+        csv_path,
+        [
+            (None, lambda m: os.path.join(out_dir, f"{FULL_PREFIX}_{m}_{ts}.xlsx")),
+            (STATION, lambda m: os.path.join(out_dir, f"{EW1_PREFIX}_{m}_{ts}.xlsx")),
+        ],
+    )
 
-    build_workbooks(csv_path, [(full_path, None), (ew1_path, STATION)])
+    return full_by_month, ew1_by_month, ts
 
-    return full_path, ew1_path
+
+def write_file_list(paths, list_path=FILE_LIST):
+    """Record the files this run produced, for the workflow to add and link."""
+    with open(list_path, "w", encoding="utf-8") as f:
+        for path in paths:
+            f.write(f"{path}\n")
+    return list_path
 
 
 def latest_end_month_covered(out_dir=DATA_DIR):
-    """Most recent 'end' month among existing full-data files in out_dir, or None."""
+    """Most recent month among existing full-data files in out_dir, or None."""
     pattern = os.path.join(out_dir, f"{FULL_PREFIX}_*.xlsx")
     best = None
     for path in glob.glob(pattern):
         m = _FILENAME_RE.search(os.path.basename(path))
         if m:
-            end = m.group(2)
-            if best is None or end > best:
-                best = end
+            month = m.group(1)
+            if best is None or month > best:
+                best = month
     return best

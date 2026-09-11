@@ -17,7 +17,11 @@ import sys
 from datetime import date
 
 from fetch_lta_bus_data import fetch_all_historical
-from bus_pipeline_common import build_named_reports, latest_end_month_covered
+from bus_pipeline_common import (
+    build_named_reports,
+    latest_end_month_covered,
+    write_file_list,
+)
 
 CSV_TMP = "lta_bus_od_historical.csv"
 
@@ -70,14 +74,22 @@ def main():
         set_output("updated", "false")
         sys.exit(1)
 
-    start, end = months[0], months[-1]
-    station_path = build_named_reports(CSV_TMP, start, end)
-    print(f"Built {station_path} covering {start}..{end}.")
+    station_by_month, ts = build_named_reports(CSV_TMP)
+
+    paths = [station_by_month[m] for m in sorted(station_by_month)]
+    if not paths:
+        print("Fetch succeeded but no rows involved the configured bus stop — nothing to publish.")
+        set_output("updated", "false")
+        sys.exit(1)
+
+    write_file_list(paths)
+    print(f"Built {len(paths)} file(s) for {dash_month}.")
 
     set_output("updated", "true")
-    set_output("station_path", station_path)
-    set_output("start", start)
-    set_output("end", end)
+    set_output("ts", ts)
+    set_output("count", len(station_by_month))
+    set_output("start", months[0])
+    set_output("end", months[-1])
 
 
 if __name__ == "__main__":

@@ -45,9 +45,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: lta-train-od-reports
-          path: |
-            ${{ steps.pipeline.outputs.full_path }}
-            ${{ steps.pipeline.outputs.ew1_path }}
+          path: data/*_${{ steps.pipeline.outputs.ts }}.xlsx
           retention-days: 30
 
       - name: Commit reports
@@ -55,8 +53,8 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
-          git commit -m "chore: monthly auto-fetch of LTA train OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
+          xargs -a report_files.txt git add --
+          git commit -m "chore: monthly auto-fetch of LTA train OD data (${{ steps.pipeline.outputs.end }})"
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -76,23 +74,21 @@ jobs:
         id: emailbody
         if: steps.pipeline.outputs.updated == 'true' && steps.emailcheck.outputs.configured == 'true'
         run: |
-          full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
-          ew1_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.ew1_path }}"
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           {
-            echo "html<<EOF"
-            cat <<HTML
-          <h2>LTA Train OD Data &mdash; Monthly Auto Fetch</h2>
-          <p>New month published: <strong>${{ steps.pipeline.outputs.end }}</strong></p>
-          <p>Data range in this file: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
-          <p><strong>Download links:</strong></p>
-          <ul>
-            <li><a href="$full_url">Full dataset (all stations)</a></li>
-            <li><a href="$ew1_url">EW1-filtered dataset</a></li>
-          </ul>
-          <p style="color:#666;font-size:0.9em;">Triggered by monthly schedule &middot; <a href="$run_url">View workflow run</a></p>
-          HTML
-            echo "EOF"
+            echo "html<<HTMLEOF"
+            echo "<h2>LTA Train OD Data &mdash; Monthly Auto Fetch</h2>"
+            echo "<p>New month published: <strong>${{ steps.pipeline.outputs.end }}</strong></p>"
+            echo "<p><strong>Download links (one file per month):</strong></p>"
+            echo "<ul>"
+            while IFS= read -r p; do
+              [ -n "$p" ] || continue
+              url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/$p"
+              echo "  <li><a href=\"$url\">$(basename "$p")</a></li>"
+            done < report_files.txt
+            echo "</ul>"
+            echo "<p style=\"color:#666;font-size:0.9em;\">Triggered by monthly schedule &middot; <a href=\"$run_url\">View workflow run</a></p>"
+            echo "HTMLEOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Email the report

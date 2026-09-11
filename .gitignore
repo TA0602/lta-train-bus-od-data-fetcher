@@ -1,4 +1,6 @@
 __pycache__/
 *.pyc
 lta_train_od_historical.csv
+lta_bus_od_historical.csv
+report_files.txt
 *.zip
