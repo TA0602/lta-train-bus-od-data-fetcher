@@ -95,5 +95,10 @@ python3 -c "import pandas as pd; pd.read_csv('lta_train_od_historical.csv').to_e
 - Network access to `datamall2.mytransport.sg` is blocked from wherever you're running this — try a different network.
 - Verify the API key is valid.
 
+**"API rate limit / quota exceeded"**
+- The LTA DataMall API key has a request quota. Repeated testing (including earlier broken versions of this script that hammered the endpoint) can exhaust it.
+- Wait a while and try again later — the script now stops immediately on this error and saves whatever it already collected instead of wasting further requests.
+- The script also waits 1.5s between month requests to avoid tripping this again.
+
 **Some months are missing from the output**
 - Expected — LTA only publishes a rolling window of recent months. The script logs which months it found data for.

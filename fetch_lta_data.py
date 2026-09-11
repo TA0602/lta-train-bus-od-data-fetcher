@@ -15,18 +15,23 @@ import zipfile
 import io
 import csv
 import sys
+import time
 from datetime import date
 
 BASE_URL = "https://datamall2.mytransport.sg/ltaodataservice/PV/ODTrain"
 
 
-def get_download_link(api_key, yyyymm, debug=False):
+class QuotaExceeded(Exception):
+    pass
+
+
+def get_download_link(api_key, yyyymm):
     """Query the API for a given month and return the ZIP download link, or None."""
     headers = {"AccountKey": api_key, "accept": "application/json"}
     params = {"Date": yyyymm}
     response = requests.get(BASE_URL, headers=headers, params=params, timeout=30)
-    if debug and not response.ok:
-        print(f"    [debug] status={response.status_code} body={response.text[:500]!r}")
+    if response.status_code == 500 and "QuotaViolation" in response.text:
+        raise QuotaExceeded(response.text[:300])
     response.raise_for_status()
     data = response.json()
     values = data.get("value", []) if isinstance(data, dict) else data
@@ -80,8 +85,17 @@ def fetch_all_historical(api_key, output_file="lta_train_od_historical.csv", mon
 
     for i, yyyymm in enumerate(previous_months(months_back)):
         print(f"Checking {yyyymm}...")
+
+        if i > 0:
+            time.sleep(1.5)  # be gentle on the API's rate limit
+
         try:
-            link = get_download_link(api_key, yyyymm, debug=(i < 3))
+            link = get_download_link(api_key, yyyymm)
+        except QuotaExceeded as e:
+            print(f"\n✗ API rate limit / quota exceeded: {e}")
+            print(f"  Stopping here. Collected {len(all_rows)} rows from {len(months_found)} month(s) so far.")
+            print(f"  Wait for the quota to reset and try again later.")
+            break
         except requests.exceptions.HTTPError as e:
             print(f"  No data / error for {yyyymm}: {e}")
             continue
