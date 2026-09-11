@@ -1,6 +1,0 @@
-StartStation,EndStation,Line,OriginCode,DestinationCode,Trips,TripDate,Time
-Yishun,Bishan,NS,NS08,NS09,1250,2026-09-11,06:30
-Tampines,Simei,EW,EW04,EW05,890,2026-09-11,07:15
-Orchard,Somerset,NS,NS22,NS23,2105,2026-09-11,08:00
-Marina Bay,Raffles Place,DM,DM09,DM10,1876,2026-09-11,08:45
-Bukit Batok,Ang Mo Kio,NS,NS02,NS03,645,2026-09-11,09:30

@@ -1,122 +1,136 @@
 #!/usr/bin/env python3
 """
 LTA OD Train Historical Data Fetcher
-Fetches all available Origin-Destination train data from Singapore LTA API and saves to CSV
+
+The LTA DataMall PV/ODTrain endpoint does not return data rows directly.
+Each call returns a JSON object with a "Link" to a ZIP file containing a
+CSV of origin-destination train trip counts for one month. This script
+queries the endpoint for a range of months (via the Date=YYYYMM param),
+downloads each available ZIP, extracts the CSV, and merges everything
+into one combined CSV file.
 """
 
 import requests
+import zipfile
+import io
 import csv
 import sys
-import json
+from datetime import date
 
-def fetch_and_save_to_csv(api_key, output_file="lta_train_od_historical.csv"):
+BASE_URL = "https://datamall2.mytransport.sg/ltaodataservice/PV/ODTrain"
+
+
+def get_download_link(api_key, yyyymm):
+    """Query the API for a given month and return the ZIP download link, or None."""
+    headers = {"AccountKey": api_key, "accept": "application/json"}
+    params = {"Date": yyyymm}
+    response = requests.get(BASE_URL, headers=headers, params=params, timeout=30)
+    response.raise_for_status()
+    data = response.json()
+    values = data.get("value", []) if isinstance(data, dict) else data
+    if not values:
+        return None
+    return values[0].get("Link")
+
+
+def download_and_extract_rows(link):
+    """Download the ZIP at `link` and return (fieldnames, rows) from the CSV inside."""
+    response = requests.get(link, timeout=120)
+    response.raise_for_status()
+
+    fieldnames = None
+    rows = []
+    with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
+        for name in zf.namelist():
+            if not name.lower().endswith(".csv"):
+                continue
+            with zf.open(name) as raw:
+                text_stream = io.TextIOWrapper(raw, encoding="utf-8-sig")
+                reader = csv.DictReader(text_stream)
+                if fieldnames is None:
+                    fieldnames = reader.fieldnames
+                rows.extend(reader)
+    return fieldnames, rows
+
+
+def previous_months(count):
+    """Return `count` YYYYMM strings for the months preceding the current month."""
+    today = date.today()
+    year, month = today.year, today.month
+    result = []
+    for _ in range(count):
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+        result.append(f"{year}{month:02d}")
+    return result
+
+
+def fetch_all_historical(api_key, output_file="lta_train_od_historical.csv", months_back=24):
     """
-    Fetch all available train OD historical data from LTA API and save to CSV
-
-    Args:
-        api_key: LTA API key (AccountKey)
-        output_file: Output CSV filename
+    Fetch OD train data for each of the last `months_back` months (skipping
+    months with no data available) and save the combined result to CSV.
     """
-    try:
-        print("Fetching historical data from LTA API...")
+    all_rows = []
+    fieldnames = None
+    months_found = []
 
-        headers = {
-            "AccountKey": api_key,
-            "accept": "application/json"
-        }
+    for yyyymm in previous_months(months_back):
+        print(f"Checking {yyyymm}...")
+        try:
+            link = get_download_link(api_key, yyyymm)
+        except requests.exceptions.HTTPError as e:
+            print(f"  No data / error for {yyyymm}: {e}")
+            continue
+        except requests.exceptions.RequestException as e:
+            print(f"  Network error for {yyyymm}: {e}")
+            continue
 
-        base_url = "https://datamall2.mytransport.sg/ltaodataservice/PV/ODTrain"
-        all_records = []
+        if not link:
+            print(f"  No data available for {yyyymm}")
+            continue
 
-        # Fetch with pagination (LTA API uses $skip parameter)
-        skip = 0
-        page_size = 500
-        max_records = 50000
-        consecutive_empty = 0
+        print(f"  Found data, downloading...")
+        try:
+            fnames, rows = download_and_extract_rows(link)
+        except Exception as e:
+            print(f"  Failed to download/extract {yyyymm}: {e}")
+            continue
 
-        while len(all_records) < max_records:
-            url = f"{base_url}?$skip={skip}"
-            print(f"  Fetching records {skip}-{skip + page_size}...")
+        if not rows:
+            print(f"  ZIP for {yyyymm} contained no rows")
+            continue
 
-            try:
-                response = requests.get(url, headers=headers, timeout=30)
-                response.raise_for_status()
+        if fieldnames is None:
+            fieldnames = fnames
 
-                data = response.json()
-                records = data.get("value", []) if isinstance(data, dict) else data
+        for row in rows:
+            row["_SourceMonth"] = yyyymm
+        all_rows.extend(rows)
+        months_found.append(yyyymm)
+        print(f"  Added {len(rows)} rows (total: {len(all_rows)})")
 
-                if not records:
-                    consecutive_empty += 1
-                    if consecutive_empty >= 2:
-                        print(f"  Reached end of dataset")
-                        break
-                else:
-                    consecutive_empty = 0
-                    all_records.extend(records)
-                    print(f"    Retrieved {len(records)} records (total: {len(all_records)})")
-
-                skip += page_size
-
-                if skip > 100000:
-                    print("  Reached safety limit, stopping fetch")
-                    break
-
-            except requests.exceptions.HTTPError as e:
-                if response.status_code == 500:
-                    print(f"  API Server Error (500) at offset {skip}. Stopping fetch with {len(all_records)} records collected.")
-                    break
-                else:
-                    print(f"  HTTP Error {response.status_code}. Stopping fetch with {len(all_records)} records collected.")
-                    break
-            except Exception as e:
-                print(f"  Error: {e}. Stopping fetch with {len(all_records)} records collected.")
-                break
-
-        if not all_records:
-            print("✗ No data received from API")
-            return False
-
-        # Remove duplicates
-        seen = set()
-        unique_records = []
-        for record in all_records:
-            record_str = json.dumps(record, sort_keys=True)
-            if record_str not in seen:
-                seen.add(record_str)
-                unique_records.append(record)
-
-        # Get all keys from records
-        all_keys = set()
-        for record in unique_records:
-            all_keys.update(record.keys())
-        fieldnames = sorted(list(all_keys))
-
-        # Write to CSV
-        with open(output_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(unique_records)
-
-        print(f"\n✓ Successfully saved {len(unique_records)} historical records to {output_file}")
-        print(f"  Columns: {', '.join(fieldnames)}")
-
-        return True
-
-    except requests.exceptions.RequestException as e:
-        print(f"✗ Network error: {e}")
+    if not all_rows:
+        print("\n✗ No historical data could be retrieved for any month in range")
         return False
-    except Exception as e:
-        print(f"✗ Error: {e}")
-        return False
+
+    out_fieldnames = list(fieldnames or []) + ["_SourceMonth"]
+    with open(output_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=out_fieldnames)
+        writer.writeheader()
+        writer.writerows(all_rows)
+
+    print(f"\n✓ Successfully saved {len(all_rows)} rows across {len(months_found)} month(s) to {output_file}")
+    print(f"  Months included: {', '.join(months_found)}")
+    print(f"  Columns: {', '.join(out_fieldnames)}")
+    return True
+
 
 if __name__ == "__main__":
-    api_key = "***REMOVED***"
-    output_file = "lta_train_od_historical.csv"
+    api_key = sys.argv[1] if len(sys.argv) > 1 else "***REMOVED***"
+    output_file = sys.argv[2] if len(sys.argv) > 2 else "lta_train_od_historical.csv"
+    months_back = int(sys.argv[3]) if len(sys.argv) > 3 else 24
 
-    if len(sys.argv) > 1:
-        api_key = sys.argv[1]
-    if len(sys.argv) > 2:
-        output_file = sys.argv[2]
-
-    success = fetch_and_save_to_csv(api_key, output_file)
+    success = fetch_all_historical(api_key, output_file, months_back)
     sys.exit(0 if success else 1)
