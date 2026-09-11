@@ -33,6 +33,26 @@ Every successful run also emails an HTML message with direct download
 links to both workbooks, once SMTP secrets are configured (optional — see
 setup guide; the files themselves are too large to attach directly).
 
+## Bus OD data too
+
+The same pattern is mirrored for Singapore's `PV/ODBus` API (Passenger
+Volume by Origin Destination Bus Stops — same CSV schema as the train
+endpoint, but `ORIGIN_PT_CODE`/`DESTINATION_PT_CODE` are bus stop codes):
+
+```
+data/lta_bus_od_full_<start>_<end>_<run-timestamp>.xlsx    — all bus stops
+data/lta_bus_od_77009_<start>_<end>_<run-timestamp>.xlsx   — bus stop 77009 only
+```
+
+- **`fetch_lta_bus_data.py`** / **`bus_pipeline_common.py`** /
+  **`manual_bus_pipeline.py`** / **`monthly_bus_pipeline.py`** — bus
+  equivalents of the train scripts above, filtered to bus stop 77009
+  (the bus equivalent of the EW1 filter on the train side)
+- **`.github/workflows/fetch-lta-bus-data-manual.yml`** /
+  **`fetch-lta-bus-data-monthly.yml`** — same manual/monthly split as the
+  train workflows (monthly runs at `01:15 UTC` instead of `01:00`, to
+  avoid both hitting LTA's short-window rate limit at the same instant)
+
 ## ⚠️ Repository history was purged (2026-09-11)
 
 All git history prior to this notice was rewritten to strip every data

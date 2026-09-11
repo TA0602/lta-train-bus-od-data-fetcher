@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""
+Orchestrator for the scheduled monthly bus OD workflow.
+
+LTA publishes each month's data by the 10th of the following month. This
+script is meant to run daily from the 11th onward: it first checks whether
+the just-published month is already covered by an existing dated file in
+data/ (no wasted API calls if so), and only calls the LTA API when there's
+actually new data to fetch. Sets GITHUB_OUTPUT `updated=true|false` (plus
+file path when true) for the workflow to decide whether to zip/email/
+commit, and exits non-zero when the new month isn't published yet so the
+workflow's daily retry has something to act on.
+"""
+
+import csv
+import os
+import sys
+from datetime import date
+
+from fetch_lta_bus_data import fetch_all_historical
+from bus_pipeline_common import build_named_reports, latest_end_month_covered
+
+CSV_TMP = "lta_bus_od_historical.csv"
+
+
+def target_month_dash():
+    """The most recently completed calendar month, as 'YYYY-MM'."""
+    today = date.today()
+    year, month = today.year, today.month
+    month -= 1
+    if month == 0:
+        month = 12
+        year -= 1
+    return f"{year}-{month:02d}"
+
+
+def months_in_csv(csv_path):
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        idx = header.index("YEAR_MONTH")
+        return {row[idx] for row in reader}
+
+
+def set_output(name, value):
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a") as f:
+            f.write(f"{name}={value}\n")
+
+
+def main():
+    api_key = sys.argv[1] if len(sys.argv) > 1 else None
+    if not api_key:
+        print("Usage: python3 monthly_bus_pipeline.py <api_key>")
+        sys.exit(2)
+
+    dash_month = target_month_dash()
+    covered = latest_end_month_covered()
+
+    if covered is not None and covered >= dash_month:
+        print(f"Already have data through {covered} (target {dash_month}) — nothing to do.")
+        set_output("updated", "false")
+        sys.exit(0)
+
+    print(f"Looking for newly published data for {dash_month}...")
+    # Only fetch the one new target month — older months never change once
+    # published and are already covered by a previous run's committed
+    # file, so re-fetching them here would just waste API quota.
+    success = fetch_all_historical(api_key, CSV_TMP, months_back=1)
+
+    if not success:
+        print(f"No data available yet for {dash_month}.")
+        set_output("updated", "false")
+        sys.exit(1)
+
+    found_months = months_in_csv(CSV_TMP)
+    if dash_month not in found_months:
+        print(f"Fetch succeeded but {dash_month} still isn't published (found: {sorted(found_months)}).")
+        set_output("updated", "false")
+        sys.exit(1)
+
+    full_path, station_path, start, end = build_named_reports(CSV_TMP)
+    print(f"Built {full_path} and {station_path} covering {start}..{end}.")
+
+    set_output("updated", "true")
+    set_output("full_path", full_path)
+    set_output("station_path", station_path)
+    set_output("start", start)
+    set_output("end", end)
+
+
+if __name__ == "__main__":
+    main()
