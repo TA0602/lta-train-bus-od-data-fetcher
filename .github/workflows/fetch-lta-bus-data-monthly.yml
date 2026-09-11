@@ -1,0 +1,113 @@
+name: LTA Bus OD Data - Monthly Auto Fetch
+
+on:
+  # LTA publishes each month's data by the 10th of the following month.
+  # Run daily from the 11th through the last day of the month at 01:15
+  # UTC (offset from the train workflow's 01:00 to avoid both hitting the
+  # LTA API's short-window burst rate limit at the same moment); the
+  # pipeline itself skips work (exit 0, no API calls) once that month's
+  # data is already covered by an existing dated file, and exits non-zero
+  # (a visible "failed" run) if the data isn't published yet — so the next
+  # day's scheduled run retries. Day-of-month "11-31" is safe for short
+  # months: cron simply never fires on a day that doesn't exist (e.g. Feb
+  # has no 31st), so this naturally runs through each month's actual last
+  # day without needing month-specific ranges.
+  schedule:
+    - cron: '15 1 11-31 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check for and fetch new month if published
+        id: pipeline
+        run: python3 monthly_bus_pipeline.py "${{ secrets.LTA_API_KEY }}"
+        env:
+          LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
+        continue-on-error: true
+
+      - name: Upload report as workflow artifact
+        if: steps.pipeline.outputs.updated == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: lta-bus-od-reports
+          path: ${{ steps.pipeline.outputs.full_path }}
+          retention-days: 30
+
+      - name: Commit report
+        if: steps.pipeline.outputs.updated == 'true'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add "${{ steps.pipeline.outputs.full_path }}"
+          git commit -m "chore: monthly auto-fetch of LTA bus OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check email configuration
+        id: emailcheck
+        if: steps.pipeline.outputs.updated == 'true'
+        run: |
+          if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.SMTP_USERNAME }}" ] && [ -n "${{ secrets.SMTP_PASSWORD }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Email secrets not fully configured — skipping email step. See LTA_DATA_SETUP.md."
+          fi
+
+      - name: Build email body
+        id: emailbody
+        if: steps.pipeline.outputs.updated == 'true' && steps.emailcheck.outputs.configured == 'true'
+        run: |
+          full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "html<<EOF"
+            cat <<HTML
+          <h2>LTA Bus OD Data &mdash; Monthly Auto Fetch</h2>
+          <p>New month published: <strong>${{ steps.pipeline.outputs.end }}</strong></p>
+          <p>Data range in this file: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
+          <p><strong>Download link:</strong></p>
+          <ul>
+            <li><a href="$full_url">Full dataset (all bus stops)</a></li>
+          </ul>
+          <p style="color:#666;font-size:0.9em;">Triggered by monthly schedule &middot; <a href="$run_url">View workflow run</a></p>
+          HTML
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Email the report
+        if: steps.pipeline.outputs.updated == 'true' && steps.emailcheck.outputs.configured == 'true'
+        uses: dawidd6/action-send-mail@v21
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT || 587 }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "LTA Bus OD Data (Auto): new month ${{ steps.pipeline.outputs.end }} published"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
+          html_body: ${{ steps.emailbody.outputs.html }}
+
+      - name: Fail the run if data wasn't published yet
+        if: steps.pipeline.outcome == 'failure'
+        run: |
+          echo "New month's data not yet available — will retry on next scheduled run."
+          exit 1

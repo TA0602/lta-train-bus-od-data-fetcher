@@ -1,0 +1,93 @@
+name: LTA Bus OD Data - Manual Fetch
+
+on:
+  # Manual trigger from the Actions tab. Always fetches the last 3
+  # published months (checking a 4th as a boundary confirmation) and
+  # writes a new, uniquely-named file — never overwrites a previous run's
+  # output.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch data and build dated report
+        id: pipeline
+        run: python3 manual_bus_pipeline.py "${{ secrets.LTA_API_KEY }}" 4
+        env:
+          LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
+
+      - name: Upload report as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: lta-bus-od-reports
+          path: ${{ steps.pipeline.outputs.full_path }}
+          retention-days: 30
+
+      - name: Commit report
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add "${{ steps.pipeline.outputs.full_path }}"
+          git commit -m "chore: manual fetch of LTA bus OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check email configuration
+        id: emailcheck
+        run: |
+          if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.SMTP_USERNAME }}" ] && [ -n "${{ secrets.SMTP_PASSWORD }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Email secrets not fully configured — skipping email step. See LTA_DATA_SETUP.md."
+          fi
+
+      - name: Build email body
+        id: emailbody
+        if: steps.emailcheck.outputs.configured == 'true'
+        run: |
+          full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "html<<EOF"
+            cat <<HTML
+          <h2>LTA Bus OD Data &mdash; Manual Fetch</h2>
+          <p>Data range: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
+          <p><strong>Download link:</strong></p>
+          <ul>
+            <li><a href="$full_url">Full dataset (all bus stops)</a></li>
+          </ul>
+          <p style="color:#666;font-size:0.9em;">Triggered manually &middot; <a href="$run_url">View workflow run</a></p>
+          HTML
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Email the report
+        if: steps.emailcheck.outputs.configured == 'true'
+        uses: dawidd6/action-send-mail@v21
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT || 587 }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "LTA Bus OD Data (Manual): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
+          html_body: ${{ steps.emailbody.outputs.html }}
