@@ -1,0 +1,38 @@
+name: Fetch LTA Train Historical Data
+
+on:
+  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: claude/modest-cannon-qzr926
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch LTA historical data
+        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.xlsx"
+        env:
+          LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
+
+      - name: Commit and push data
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add lta_train_od_historical.xlsx
+          git commit -m "chore: fetch LTA train OD historical data" || true
+          git push origin claude/modest-cannon-qzr926
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
