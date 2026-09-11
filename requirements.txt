@@ -1,1 +1,3 @@
+# LTA Data Fetcher - Simple requirements
+# Uses only requests, csv and json (all built-in)
 requests
