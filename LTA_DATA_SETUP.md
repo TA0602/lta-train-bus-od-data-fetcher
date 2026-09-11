@@ -79,6 +79,20 @@ git push origin main
 This only succeeds if the Actions runner has network access to the LTA API —
 test the manual method first if you're unsure.
 
+### 3. Download the Result
+
+The dataset (all months combined) can easily be 100MB+, over GitHub's
+per-file commit limit, so the workflow uploads it as a **workflow run
+artifact** rather than only relying on a git commit:
+
+1. Go to the workflow run's summary page (**Actions** tab → the run)
+2. Scroll to **Artifacts** and download `lta-train-od-historical-data`
+   (contains both the raw `.csv` and a `.csv.gz` compressed copy)
+
+If the gzip-compressed file happens to be under 50MB, the workflow also
+commits it straight to the repo as `lta_train_od_historical.csv.gz` — unzip
+it locally with `gunzip lta_train_od_historical.csv.gz`.
+
 ## Converting to Excel
 
 The output is CSV. To get an `.xlsx` file, open the CSV in Excel/Google
