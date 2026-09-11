@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+lta_train_od_historical.csv
+*.zip

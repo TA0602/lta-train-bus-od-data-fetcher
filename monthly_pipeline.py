@@ -4,12 +4,12 @@ Orchestrator for the scheduled monthly workflow.
 
 LTA publishes each month's data by the 10th of the following month. This
 script is meant to run daily from the 11th onward: it first checks whether
-the just-published month is already present in the committed workbook
-(no wasted API calls if so), and only calls the LTA API when there's
-actually new data to fetch. Sets GITHUB_OUTPUT `updated=true|false` for the
-workflow to decide whether to commit, and exits non-zero when the new
-month isn't published yet so the workflow's daily retry has something to
-act on.
+the just-published month is already covered by an existing dated file in
+data/ (no wasted API calls if so), and only calls the LTA API when there's
+actually new data to fetch. Sets GITHUB_OUTPUT `updated=true|false` (plus
+file paths when true) for the workflow to decide whether to zip/email/
+commit, and exits non-zero when the new month isn't published yet so the
+workflow's daily retry has something to act on.
 """
 
 import csv
@@ -18,35 +18,20 @@ import sys
 from datetime import date
 
 from fetch_lta_data import fetch_all_historical
-from build_reports import build_workbook
+from pipeline_common import build_named_reports, latest_end_month_covered
 
-try:
-    from openpyxl import load_workbook
-except ImportError:
-    load_workbook = None
-
-FULL_XLSX = "lta_train_od_historical_by_month.xlsx"
-EW1_XLSX = "lta_train_od_EW1_by_month.xlsx"
 CSV_TMP = "lta_train_od_historical.csv"
-STATION = "EW1"
 
 
-def target_month():
-    """The most recently completed calendar month, as (YYYYMM, YYYY-MM)."""
+def target_month_dash():
+    """The most recently completed calendar month, as 'YYYY-MM'."""
     today = date.today()
     year, month = today.year, today.month
     month -= 1
     if month == 0:
         month = 12
         year -= 1
-    return f"{year}{month:02d}", f"{year}-{month:02d}"
-
-
-def already_have_month(dash_month):
-    if load_workbook is None or not os.path.exists(FULL_XLSX):
-        return False
-    wb = load_workbook(FULL_XLSX, read_only=True)
-    return dash_month in wb.sheetnames
+    return f"{year}-{month:02d}"
 
 
 def months_in_csv(csv_path):
@@ -70,10 +55,11 @@ def main():
         print("Usage: python3 monthly_pipeline.py <api_key>")
         sys.exit(2)
 
-    yyyymm, dash_month = target_month()
+    dash_month = target_month_dash()
+    covered = latest_end_month_covered()
 
-    if already_have_month(dash_month):
-        print(f"Already have data for {dash_month} — nothing to do.")
+    if covered is not None and covered >= dash_month:
+        print(f"Already have data through {covered} (target {dash_month}) — nothing to do.")
         set_output("updated", "false")
         sys.exit(0)
 
@@ -91,10 +77,14 @@ def main():
         set_output("updated", "false")
         sys.exit(1)
 
-    build_workbook(CSV_TMP, FULL_XLSX)
-    build_workbook(CSV_TMP, EW1_XLSX, station=STATION)
-    print(f"Updated with {dash_month} data.")
+    full_path, ew1_path, start, end = build_named_reports(CSV_TMP)
+    print(f"Built {full_path} and {ew1_path} covering {start}..{end}.")
+
     set_output("updated", "true")
+    set_output("full_path", full_path)
+    set_output("ew1_path", ew1_path)
+    set_output("start", start)
+    set_output("end", end)
 
 
 if __name__ == "__main__":

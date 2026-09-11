@@ -1,9 +1,10 @@
 name: LTA Data - Manual Fetch
 
 on:
-  # Manual trigger from the Actions tab. Fetches the last 3 published
-  # months (checking a 4th as a boundary confirmation) regardless of
-  # whether the data already exists locally.
+  # Manual trigger from the Actions tab. Always fetches the last 3
+  # published months (checking a 4th as a boundary confirmation) and
+  # writes new, uniquely-named files — never overwrites a previous run's
+  # output.
   workflow_dispatch:
 
 permissions:
@@ -25,31 +26,61 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Fetch LTA historical data
-        run: python3 fetch_lta_data.py "${{ secrets.LTA_API_KEY }}" "lta_train_od_historical.csv" 4
+      - name: Fetch data and build dated reports
+        id: pipeline
+        run: python3 manual_pipeline.py "${{ secrets.LTA_API_KEY }}" 4
         env:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
 
-      - name: Build multi-sheet reports
+      - name: Zip reports (max compression)
+        id: zip
         run: |
-          python3 build_reports.py lta_train_od_historical.csv lta_train_od_historical_by_month.xlsx
-          python3 build_reports.py lta_train_od_historical.csv lta_train_od_EW1_by_month.xlsx EW1
+          zip_name="lta_train_od_reports_${{ steps.pipeline.outputs.start }}_${{ steps.pipeline.outputs.end }}_$(date -u +%Y%m%dT%H%M%SZ).zip"
+          zip -9 -j "$zip_name" "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
+          echo "zip_path=$zip_name" >> "$GITHUB_OUTPUT"
 
       - name: Upload reports as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lta-train-od-reports
           path: |
-            lta_train_od_historical_by_month.xlsx
-            lta_train_od_EW1_by_month.xlsx
+            ${{ steps.pipeline.outputs.full_path }}
+            ${{ steps.pipeline.outputs.ew1_path }}
+            ${{ steps.zip.outputs.zip_path }}
           retention-days: 30
 
       - name: Commit reports
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add lta_train_od_historical_by_month.xlsx lta_train_od_EW1_by_month.xlsx
-          git commit -m "chore: manual fetch of LTA train OD data" || true
+          git add "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
+          git commit -m "chore: manual fetch of LTA train OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check email configuration
+        id: emailcheck
+        run: |
+          if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.SMTP_USERNAME }}" ] && [ -n "${{ secrets.SMTP_PASSWORD }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Email secrets not fully configured — skipping email step. See LTA_DATA_SETUP.md."
+          fi
+
+      - name: Email the report
+        if: steps.emailcheck.outputs.configured == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT || 587 }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "LTA Train OD Data (manual fetch): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: LTA Data Fetcher
+          body: |
+            Manual fetch complete for ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}.
+            Attached: full dataset + EW1-filtered workbook, zipped.
+          attachments: ${{ steps.zip.outputs.zip_path }}

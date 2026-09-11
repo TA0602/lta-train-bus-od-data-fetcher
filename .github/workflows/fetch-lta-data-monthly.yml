@@ -4,8 +4,9 @@ on:
   # LTA publishes each month's data by the 10th of the following month.
   # Run daily from the 11th through the 20th at 01:00 UTC; the pipeline
   # itself skips work (exit 0, no API calls) once that month's data is
-  # already committed, and exits non-zero (a visible "failed" run) if the
-  # data isn't published yet — so the next day's scheduled run retries.
+  # already covered by an existing dated file, and exits non-zero (a
+  # visible "failed" run) if the data isn't published yet — so the next
+  # day's scheduled run retries.
   schedule:
     - cron: '0 1 11-20 * *'
   workflow_dispatch:
@@ -36,14 +37,23 @@ jobs:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
         continue-on-error: true
 
+      - name: Zip reports (max compression)
+        id: zip
+        if: steps.pipeline.outputs.updated == 'true'
+        run: |
+          zip_name="lta_train_od_reports_${{ steps.pipeline.outputs.start }}_${{ steps.pipeline.outputs.end }}_$(date -u +%Y%m%dT%H%M%SZ).zip"
+          zip -9 -j "$zip_name" "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
+          echo "zip_path=$zip_name" >> "$GITHUB_OUTPUT"
+
       - name: Upload reports as workflow artifacts
         if: steps.pipeline.outputs.updated == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: lta-train-od-reports
           path: |
-            lta_train_od_historical_by_month.xlsx
-            lta_train_od_EW1_by_month.xlsx
+            ${{ steps.pipeline.outputs.full_path }}
+            ${{ steps.pipeline.outputs.ew1_path }}
+            ${{ steps.zip.outputs.zip_path }}
           retention-days: 30
 
       - name: Commit reports
@@ -51,11 +61,38 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add lta_train_od_historical_by_month.xlsx lta_train_od_EW1_by_month.xlsx
-          git commit -m "chore: monthly auto-fetch of LTA train OD data"
+          git add "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
+          git commit -m "chore: monthly auto-fetch of LTA train OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check email configuration
+        id: emailcheck
+        if: steps.pipeline.outputs.updated == 'true'
+        run: |
+          if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.SMTP_USERNAME }}" ] && [ -n "${{ secrets.SMTP_PASSWORD }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Email secrets not fully configured — skipping email step. See LTA_DATA_SETUP.md."
+          fi
+
+      - name: Email the report
+        if: steps.pipeline.outputs.updated == 'true' && steps.emailcheck.outputs.configured == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT || 587 }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "LTA Train OD Data (monthly): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: LTA Data Fetcher
+          body: |
+            Monthly auto-fetch complete for ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}.
+            Attached: full dataset + EW1-filtered workbook, zipped.
+          attachments: ${{ steps.zip.outputs.zip_path }}
 
       - name: Fail the run if data wasn't published yet
         if: steps.pipeline.outcome == 'failure'
