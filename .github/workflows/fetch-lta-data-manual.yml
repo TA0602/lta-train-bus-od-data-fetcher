@@ -94,5 +94,4 @@ jobs:
           subject: "LTA Train OD Data (Manual): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
-          content_type: text/html
-          body: ${{ steps.emailbody.outputs.html }}
+          html_body: ${{ steps.emailbody.outputs.html }}

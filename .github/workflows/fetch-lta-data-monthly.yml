@@ -103,8 +103,7 @@ jobs:
           subject: "LTA Train OD Data (Auto): new month ${{ steps.pipeline.outputs.end }} published"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
-          content_type: text/html
-          body: ${{ steps.emailbody.outputs.html }}
+          html_body: ${{ steps.emailbody.outputs.html }}
 
       - name: Fail the run if data wasn't published yet
         if: steps.pipeline.outcome == 'failure'
