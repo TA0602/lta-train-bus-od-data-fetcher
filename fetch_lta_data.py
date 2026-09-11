@@ -20,11 +20,13 @@ from datetime import date
 BASE_URL = "https://datamall2.mytransport.sg/ltaodataservice/PV/ODTrain"
 
 
-def get_download_link(api_key, yyyymm):
+def get_download_link(api_key, yyyymm, debug=False):
     """Query the API for a given month and return the ZIP download link, or None."""
     headers = {"AccountKey": api_key, "accept": "application/json"}
     params = {"Date": yyyymm}
     response = requests.get(BASE_URL, headers=headers, params=params, timeout=30)
+    if debug and not response.ok:
+        print(f"    [debug] status={response.status_code} body={response.text[:500]!r}")
     response.raise_for_status()
     data = response.json()
     values = data.get("value", []) if isinstance(data, dict) else data
@@ -76,10 +78,10 @@ def fetch_all_historical(api_key, output_file="lta_train_od_historical.csv", mon
     fieldnames = None
     months_found = []
 
-    for yyyymm in previous_months(months_back):
+    for i, yyyymm in enumerate(previous_months(months_back)):
         print(f"Checking {yyyymm}...")
         try:
-            link = get_download_link(api_key, yyyymm)
+            link = get_download_link(api_key, yyyymm, debug=(i < 3))
         except requests.exceptions.HTTPError as e:
             print(f"  No data / error for {yyyymm}: {e}")
             continue
