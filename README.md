@@ -50,7 +50,7 @@ data/lta_bus_od_77009_<start>_<end>_<run-timestamp>.xlsx   — bus stop 77009 on
   (the bus equivalent of the EW1 filter on the train side)
 - **`.github/workflows/fetch-lta-bus-data-manual.yml`** /
   **`fetch-lta-bus-data-monthly.yml`** — same manual/monthly split as the
-  train workflows (monthly runs at `01:15 UTC` instead of `01:00`, to
+  train workflows (monthly runs at `01:01 UTC` instead of `01:00`, to
   avoid both hitting LTA's short-window rate limit at the same instant)
 
 ## ⚠️ Repository history was purged (2026-09-11)
@@ -72,19 +72,21 @@ files were removed. See `HANDOVER.md` for full project context.
 
 ## Files
 
-- **`fetch_lta_data.py`** — fetches and merges historical OD train data into a CSV
+- **`fetch_lta_train_data.py`** — fetches and merges historical OD train data into a CSV
 - **`build_reports.py`** — converts CSV → multi-sheet Excel, optionally filtered by station
-- **`pipeline_common.py`** — naming convention + "what's already covered" detection
-- **`manual_pipeline.py`** / **`monthly_pipeline.py`** — orchestrators for each workflow
+- **`train_pipeline_common.py`** — naming convention + "what's already covered" detection
+- **`manual_train_pipeline.py`** / **`monthly_train_pipeline.py`** — orchestrators for each workflow
 - **`requirements.txt`** — Python dependencies (`requests`, `openpyxl`)
-- **`.github/workflows/`** — the two workflows described above
+- **`.github/workflows/`** — the train and bus workflows described above,
+  plus `resend-lta-train-email.yml` (re-sends the email for the most
+  recently built train files without calling the API again)
 - **`LTA_DATA_SETUP.md`** — full setup guide, workflow details, and troubleshooting
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-python3 manual_pipeline.py "<YOUR_LTA_API_KEY>" 4
+python3 manual_train_pipeline.py "<YOUR_LTA_API_KEY>" 4
 ```
 
 Writes the two dated workbooks into `data/`.

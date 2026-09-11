@@ -8,8 +8,8 @@ output).
 import os
 import sys
 
-from fetch_lta_data import fetch_all_historical
-from pipeline_common import build_named_reports
+from fetch_lta_train_data import fetch_all_historical
+from train_pipeline_common import build_named_reports
 
 CSV_TMP = "lta_train_od_historical.csv"
 
@@ -23,7 +23,7 @@ def set_output(name, value):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 manual_pipeline.py <api_key> [months_back]")
+        print("Usage: python3 manual_train_pipeline.py <api_key> [months_back]")
         sys.exit(2)
 
     api_key = sys.argv[1]

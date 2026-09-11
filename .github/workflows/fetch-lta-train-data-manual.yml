@@ -1,17 +1,10 @@
-name: LTA Data - Monthly Auto Fetch
+name: LTA Train Data - Manual Fetch
 
 on:
-  # LTA publishes each month's data by the 10th of the following month.
-  # Run daily from the 11th through the last day of the month at 01:00
-  # UTC; the pipeline itself skips work (exit 0, no API calls) once that
-  # month's data is already covered by an existing dated file, and exits
-  # non-zero (a visible "failed" run) if the data isn't published yet —
-  # so the next day's scheduled run retries. Day-of-month "11-31" is safe
-  # for short months: cron simply never fires on a day that doesn't exist
-  # (e.g. Feb has no 31st), so this naturally runs through each month's
-  # actual last day without needing month-specific ranges.
-  schedule:
-    - cron: '0 1 11-31 * *'
+  # Manual trigger from the Actions tab. Always fetches the last 3
+  # published months (checking a 4th as a boundary confirmation) and
+  # writes new, uniquely-named files — never overwrites a previous run's
+  # output.
   workflow_dispatch:
 
 permissions:
@@ -33,15 +26,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Check for and fetch new month if published
+      - name: Fetch data and build dated reports
         id: pipeline
-        run: python3 monthly_pipeline.py "${{ secrets.LTA_API_KEY }}"
+        run: python3 manual_train_pipeline.py "${{ secrets.LTA_API_KEY }}" 4
         env:
           LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
-        continue-on-error: true
 
       - name: Upload reports as workflow artifacts
-        if: steps.pipeline.outputs.updated == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: lta-train-od-reports
@@ -51,19 +42,17 @@ jobs:
           retention-days: 30
 
       - name: Commit reports
-        if: steps.pipeline.outputs.updated == 'true'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
-          git commit -m "chore: monthly auto-fetch of LTA train OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
+          git commit -m "chore: manual fetch of LTA train OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check email configuration
         id: emailcheck
-        if: steps.pipeline.outputs.updated == 'true'
         run: |
           if [ -n "${{ secrets.SMTP_SERVER }}" ] && [ -n "${{ secrets.SMTP_USERNAME }}" ] && [ -n "${{ secrets.SMTP_PASSWORD }}" ] && [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
@@ -74,7 +63,7 @@ jobs:
 
       - name: Build email body
         id: emailbody
-        if: steps.pipeline.outputs.updated == 'true' && steps.emailcheck.outputs.configured == 'true'
+        if: steps.emailcheck.outputs.configured == 'true'
         run: |
           full_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.full_path }}"
           ew1_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/${{ steps.pipeline.outputs.ew1_path }}"
@@ -82,34 +71,27 @@ jobs:
           {
             echo "html<<EOF"
             cat <<HTML
-          <h2>LTA Train OD Data &mdash; Monthly Auto Fetch</h2>
-          <p>New month published: <strong>${{ steps.pipeline.outputs.end }}</strong></p>
-          <p>Data range in this file: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
+          <h2>LTA Train OD Data &mdash; Manual Fetch</h2>
+          <p>Data range: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
           <p><strong>Download links:</strong></p>
           <ul>
             <li><a href="$full_url">Full dataset (all stations)</a></li>
             <li><a href="$ew1_url">EW1-filtered dataset</a></li>
           </ul>
-          <p style="color:#666;font-size:0.9em;">Triggered by monthly schedule &middot; <a href="$run_url">View workflow run</a></p>
+          <p style="color:#666;font-size:0.9em;">Triggered manually &middot; <a href="$run_url">View workflow run</a></p>
           HTML
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Email the report
-        if: steps.pipeline.outputs.updated == 'true' && steps.emailcheck.outputs.configured == 'true'
+        if: steps.emailcheck.outputs.configured == 'true'
         uses: dawidd6/action-send-mail@v21
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT || 587 }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "LTA Train OD Data (Auto): new month ${{ steps.pipeline.outputs.end }} published"
+          subject: "LTA Train OD Data (Manual): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
           html_body: ${{ steps.emailbody.outputs.html }}
-
-      - name: Fail the run if data wasn't published yet
-        if: steps.pipeline.outcome == 'failure'
-        run: |
-          echo "New month's data not yet available — will retry on next scheduled run."
-          exit 1

@@ -15,7 +15,7 @@ The `PV/ODTrain` endpoint does **not** return data rows directly. Each call
 { "value": [ { "Link": "https://.../PVODTrain202401.zip" } ] }
 ```
 
-`fetch_lta_data.py` queries a range of months, downloads each available ZIP,
+`fetch_lta_train_data.py` queries a range of months, downloads each available ZIP,
 extracts the CSV inside, tags each row with its source month, and merges
 everything into one combined CSV. Per LTA's own API documentation, each
 Passenger Volume API "requests for files up to last three months" and
@@ -24,11 +24,11 @@ confirmed empirically too (older months return 404).
 
 ## Files
 
-- **`fetch_lta_data.py`** — fetches and merges historical OD train data into a CSV
+- **`fetch_lta_train_data.py`** — fetches and merges historical OD train data into a CSV
 - **`build_reports.py`** — converts a CSV into a multi-sheet Excel workbook (one sheet per month), optionally filtered to one station code
-- **`pipeline_common.py`** — shared naming convention + "what's already covered" detection
-- **`manual_pipeline.py`** — orchestrator for the on-demand workflow (always fetches + writes new files)
-- **`monthly_pipeline.py`** — orchestrator for the scheduled workflow (idempotent, quota-aware)
+- **`train_pipeline_common.py`** — shared naming convention + "what's already covered" detection
+- **`manual_train_pipeline.py`** — orchestrator for the on-demand workflow (always fetches + writes new files)
+- **`monthly_train_pipeline.py`** — orchestrator for the scheduled workflow (idempotent, quota-aware)
 - **`requirements.txt`** — Python dependencies (`requests`, `openpyxl`)
 - **`.github/workflows/`** — the two workflows described below
 
@@ -57,11 +57,11 @@ files rather than attaching them — see the size note below.
 
 ## The Two Workflows
 
-### 1. Manual Fetch (`fetch-lta-data-manual.yml`)
+### 1. Manual Fetch (`fetch-lta-train-data-manual.yml`)
 
 Trigger it yourself whenever you want a fresh pull:
 
-1. Go to **Actions** tab → **"LTA Data - Manual Fetch"**
+1. Go to **Actions** tab → **"LTA Train Data - Manual Fetch"**
 2. Click **Run workflow**
 
 Always fetches the last 3 published months (checking a 4th month as a
@@ -70,7 +70,7 @@ artifact, commits to `main`, and emails download links (once email is
 configured — see below) — regardless of whether this data was already
 fetched before.
 
-### 2. Monthly Auto Fetch (`fetch-lta-data-monthly.yml`)
+### 2. Monthly Auto Fetch (`fetch-lta-train-data-monthly.yml`)
 
 Runs on a schedule: **daily at 01:00 UTC from the 11th to the last day of
 each month** (LTA publishes the previous month's data by the 10th, so this
@@ -150,13 +150,13 @@ On any machine with real internet access:
 pip install -r requirements.txt
 
 # On-demand fetch, same as the manual workflow
-python3 manual_pipeline.py "<YOUR_LTA_API_KEY>" 4
+python3 manual_train_pipeline.py "<YOUR_LTA_API_KEY>" 4
 ```
 
 This writes the two dated files into `data/`. Or run the pieces individually:
 
 ```bash
-python3 fetch_lta_data.py "<YOUR_LTA_API_KEY>" "lta_train_od_historical.csv" 4
+python3 fetch_lta_train_data.py "<YOUR_LTA_API_KEY>" "lta_train_od_historical.csv" 4
 python3 build_reports.py lta_train_od_historical.csv some_output.xlsx        # all stations
 python3 build_reports.py lta_train_od_historical.csv some_output_ew1.xlsx EW1 # station filter
 ```
@@ -170,7 +170,7 @@ python3 build_reports.py lta_train_od_historical.csv some_output_ew1.xlsx EW1 # 
 **"API rate limit / quota exceeded"**
 - The LTA DataMall API key has a request quota. Repeated testing can exhaust it.
 - The script stops immediately on this error and saves whatever it already collected; wait a while and try again.
-- `monthly_pipeline.py`'s idempotency check keeps normal usage well within quota — it makes zero API calls once a month's data is already committed.
+- `monthly_train_pipeline.py`'s idempotency check keeps normal usage well within quota — it makes zero API calls once a month's data is already committed.
 
 **Some months are missing from the output**
 - Expected — LTA only publishes a rolling ~3-month window. The script logs which months it found data for.

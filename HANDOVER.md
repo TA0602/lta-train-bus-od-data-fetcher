@@ -23,8 +23,8 @@ resolve via GitHub's redirect, but update them).
   `data/` is now **empty**. This is expected; the next workflow run
   repopulates it.
 - Two GitHub Actions workflows are live and tested end-to-end on real
-  data: `fetch-lta-data-manual.yml` and `fetch-lta-data-monthly.yml`,
-  plus a utility `resend-email.yml`.
+  data: `fetch-lta-train-data-manual.yml` and `fetch-lta-train-data-monthly.yml`,
+  plus a utility `resend-lta-train-email.yml`.
 - **Required secret**: `LTA_API_KEY` must be set (Settings → Secrets and
   variables → Actions) for any workflow to fetch data.
 - **Optional secrets for email**: `SMTP_SERVER`, `SMTP_PORT` (defaults
@@ -38,12 +38,12 @@ resolve via GitHub's redirect, but update them).
 ## Architecture
 
 ```
-fetch_lta_data.py       — talks to the LTA API, downloads/extracts ZIPs, writes a flat CSV
+fetch_lta_train_data.py       — talks to the LTA API, downloads/extracts ZIPs, writes a flat CSV
 build_reports.py        — CSV -> multi-sheet xlsx (one sheet per YEAR_MONTH), optional station filter
-pipeline_common.py      — naming convention + "what month range is already covered in data/" detection
-manual_pipeline.py      — orchestrator: always fetch + always write new dated files (no coverage check)
-monthly_pipeline.py     — orchestrator: check coverage first, skip if already have target month, else fetch ONLY that 1 month
-resend_pipeline.py      — finds latest existing data/ file pair, no API call — used to resend email / test email formatting cheaply
+train_pipeline_common.py      — naming convention + "what month range is already covered in data/" detection
+manual_train_pipeline.py      — orchestrator: always fetch + always write new dated files (no coverage check)
+monthly_train_pipeline.py     — orchestrator: check coverage first, skip if already have target month, else fetch ONLY that 1 month
+resend_train_pipeline.py      — finds latest existing data/ file pair, no API call — used to resend email / test email formatting cheaply
 ```
 
 Naming convention (sorts chronologically as plain text, never overwritten):
@@ -60,7 +60,7 @@ data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
   wants "give me a fresh pull" behavior here.
 - **Monthly** (cron `0 1 11-31 * *` = daily 01:00 UTC / 09:00 SGT, 11th
   through last day of month, `workflow_dispatch` also works for testing):
-  checks `pipeline_common.latest_end_month_covered()` against the target
+  checks `train_pipeline_common.latest_end_month_covered()` against the target
   month (most recently completed calendar month) first. If already
   covered, exits immediately with **zero API calls**. Otherwise fetches
   **only that 1 month** (`months_back=1`) — critical, see gotcha below.
@@ -79,8 +79,8 @@ data/lta_train_od_EW1_<start:YYYY-MM>_<end:YYYY-MM>_<run:YYYYMMDDThhmmssZ>.xlsx
    documented 10M/day ToS threshold.** The actual API returns
    `{"fault":{"faultstring":"Rate limit quota violation...","errorcode":"policies.ratelimit.QuotaViolation"}}`
    (an Apigee gateway throttle) after roughly 10-15 requests within a
-   couple of minutes. This is why `fetch_lta_data.py` sleeps 1.5s between
-   month requests, and why `monthly_pipeline.py` was changed to fetch
+   couple of minutes. This is why `fetch_lta_train_data.py` sleeps 1.5s between
+   month requests, and why `monthly_train_pipeline.py` was changed to fetch
    only 1 month instead of re-fetching the whole 3-4 month window every
    run (that was wasting 2/3 of every monthly run's requests on months
    already fetched previously).

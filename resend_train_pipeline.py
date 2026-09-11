@@ -9,7 +9,7 @@ import glob
 import os
 import re
 
-from pipeline_common import DATA_DIR, FULL_PREFIX, EW1_PREFIX
+from train_pipeline_common import DATA_DIR, FULL_PREFIX, EW1_PREFIX
 
 _FILENAME_RE = re.compile(r"_(\d{4}-\d{2})_(\d{4}-\d{2})_(\d{8}T\d{6}Z)\.xlsx$")
 

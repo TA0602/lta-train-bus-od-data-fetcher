@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Shared helpers for the bus OD pipelines: naming convention, output folder,
-and month-coverage detection. Mirrors pipeline_common.py (train), but for
-the PV/ODBus dataset, filtered to bus stop 77009 instead of station EW1.
+and month-coverage detection. Mirrors train_pipeline_common.py, but for the PV/ODBus dataset, filtered
+to bus stop 77009 instead of station EW1.
 
 Naming convention (sorts chronologically as plain filenames, and never
 overwrites a previous run's output):

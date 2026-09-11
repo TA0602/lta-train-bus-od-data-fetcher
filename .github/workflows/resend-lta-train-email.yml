@@ -1,17 +1,14 @@
-name: LTA Data - Manual Fetch
+name: LTA Train Data - Resend Email
 
 on:
-  # Manual trigger from the Actions tab. Always fetches the last 3
-  # published months (checking a 4th as a boundary confirmation) and
-  # writes new, uniquely-named files — never overwrites a previous run's
-  # output.
+  # Manual trigger only — emails download links for whatever the most
+  # recently built report pair in data/ is, without calling the LTA API.
+  # Useful for testing the email step itself, or re-sending a
+  # notification without re-fetching data.
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  fetch-data:
+  resend:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,30 +23,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Fetch data and build dated reports
+      - name: Find latest existing report files
         id: pipeline
-        run: python3 manual_pipeline.py "${{ secrets.LTA_API_KEY }}" 4
-        env:
-          LTA_API_KEY: ${{ secrets.LTA_API_KEY }}
-
-      - name: Upload reports as workflow artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: lta-train-od-reports
-          path: |
-            ${{ steps.pipeline.outputs.full_path }}
-            ${{ steps.pipeline.outputs.ew1_path }}
-          retention-days: 30
-
-      - name: Commit reports
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add "${{ steps.pipeline.outputs.full_path }}" "${{ steps.pipeline.outputs.ew1_path }}"
-          git commit -m "chore: manual fetch of LTA train OD data (${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }})"
-          git push origin main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 resend_train_pipeline.py
 
       - name: Check email configuration
         id: emailcheck
@@ -58,7 +34,7 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Email secrets not fully configured — skipping email step. See LTA_DATA_SETUP.md."
+            echo "Email secrets not fully configured — cannot send."
           fi
 
       - name: Build email body
@@ -71,14 +47,14 @@ jobs:
           {
             echo "html<<EOF"
             cat <<HTML
-          <h2>LTA Train OD Data &mdash; Manual Fetch</h2>
+          <h2>LTA Train OD Data &mdash; Resend</h2>
           <p>Data range: <strong>${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}</strong></p>
           <p><strong>Download links:</strong></p>
           <ul>
             <li><a href="$full_url">Full dataset (all stations)</a></li>
             <li><a href="$ew1_url">EW1-filtered dataset</a></li>
           </ul>
-          <p style="color:#666;font-size:0.9em;">Triggered manually &middot; <a href="$run_url">View workflow run</a></p>
+          <p style="color:#666;font-size:0.9em;">Resent from already-fetched data (no new API call) &middot; <a href="$run_url">View workflow run</a></p>
           HTML
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
@@ -91,7 +67,7 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT || 587 }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "LTA Train OD Data (Manual): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
+          subject: "LTA Train OD Data (Resend): ${{ steps.pipeline.outputs.start }} to ${{ steps.pipeline.outputs.end }}"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: LTA Data Fetcher <${{ secrets.SMTP_USERNAME }}>
           html_body: ${{ steps.emailbody.outputs.html }}

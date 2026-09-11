@@ -17,8 +17,8 @@ import os
 import sys
 from datetime import date
 
-from fetch_lta_data import fetch_all_historical
-from pipeline_common import build_named_reports, latest_end_month_covered
+from fetch_lta_train_data import fetch_all_historical
+from train_pipeline_common import build_named_reports, latest_end_month_covered
 
 CSV_TMP = "lta_train_od_historical.csv"
 
@@ -52,7 +52,7 @@ def set_output(name, value):
 def main():
     api_key = sys.argv[1] if len(sys.argv) > 1 else None
     if not api_key:
-        print("Usage: python3 monthly_pipeline.py <api_key>")
+        print("Usage: python3 monthly_train_pipeline.py <api_key>")
         sys.exit(2)
 
     dash_month = target_month_dash()
